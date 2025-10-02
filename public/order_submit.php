@@ -13,6 +13,10 @@ if (cart_item_count() === 0) {
 }
 
 $tableId = (int)($_POST['table_id'] ?? 0);
+$activeTable = get_active_table();
+if ($activeTable) {
+    $tableId = (int)$activeTable['id'];
+}
 $paymentMethod = $_POST['payment_method'] ?? 'cash';
 $note = $_POST['customer_note'] ?? '';
 
@@ -62,6 +66,7 @@ try {
     ];
 
     $order = create_order($orderData, $cartItems);
+    $_SESSION['last_order_code'] = $order['order_code'];
     $orderDetails = fetch_order_details($order['id']);
 
     if ($orderDetails) {

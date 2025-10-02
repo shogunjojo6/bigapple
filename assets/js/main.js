@@ -1,4 +1,4 @@
-﻿function selectTable(element, tableId) {
+function selectTable(element, tableId) {
     const buttons = document.querySelectorAll('.table-card');
     buttons.forEach(btn => btn.classList.remove('active'));
     element.classList.add('active');
@@ -53,6 +53,21 @@ function initQuantityControls() {
 }
 
 let floatingAlertTimer;
+
+let currencyFormatter;
+try {
+    currencyFormatter = new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' });
+} catch (error) {
+    currencyFormatter = null;
+}
+
+function formatCurrencyLocal(amount) {
+    const value = Number.isFinite(amount) ? amount : 0;
+    if (currencyFormatter) {
+        return currencyFormatter.format(value);
+    }
+    return '฿' + value.toFixed(2);
+}
 
 function showFloatingAlert(message, variant = 'success') {
     let alert = document.querySelector('.floating-alert');
@@ -216,6 +231,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     initQuantityControls();
     initAddToCartForms();
+    initCallStaffButton();
+    initCartAutoUpdate();
     const serverAlert = document.querySelector('.floating-alert[data-auto-hide]');
     if (serverAlert) {
         if (serverAlert.dataset.variant === 'error') {
@@ -246,3 +263,258 @@ document.addEventListener('DOMContentLoaded', () => {
         window.addEventListener('scroll', toggleFloatingCart, { passive: true });
     }
 });
+
+function initCallStaffButton() {
+    const btn = document.getElementById('call-staff-btn');
+    if (!btn) {
+        return;
+    }
+    btn.addEventListener('click', () => {
+        if (btn.dataset.loading === '1') {
+            return;
+        }
+        btn.dataset.loading = '1';
+        btn.disabled = true;
+        fetch('table_request.php', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: new URLSearchParams({ type: 'checkout' })
+        })
+            .then(resp => resp.text())
+            .then(body => {
+                const trimmed = body.trim();
+                if (!trimmed) {
+                    throw new Error('Unexpected empty response');
+                }
+                try {
+                    return JSON.parse(trimmed);
+                } catch (error) {
+                    throw new Error('Unexpected response: ' + trimmed.slice(0, 80));
+                }
+            })
+            .then(data => {
+                if (!data || !data.success) {
+                    throw new Error(data && data.message ? data.message : 'ไม่สามารถส่งคำขอได้');
+                }
+                showFloatingAlert('แจ้งพนักงานเรียบร้อยแล้ว');
+            })
+            .catch(error => {
+                showFloatingAlert(error.message || 'ไม่สามารถส่งคำขอได้', 'error');
+            })
+            .finally(() => {
+                btn.dataset.loading = '0';
+                btn.disabled = false;
+            });
+    });
+}
+
+function initCartAutoUpdate() {
+    const cartForm = document.querySelector('[data-cart-form]');
+    if (!cartForm) {
+        return;
+    }
+
+    const totalElement = document.querySelector('[data-cart-total]');
+
+    const getUnitPrice = (row) => {
+        const datasetValue = row.dataset.unitPrice;
+        if (datasetValue !== undefined) {
+            const parsed = parseFloat(datasetValue);
+            if (!Number.isNaN(parsed)) {
+                return parsed;
+            }
+        }
+        const priceCell = row.querySelector('[data-unit-price-cell]');
+        if (priceCell) {
+            const attr = priceCell.getAttribute('data-unit-price');
+            if (attr !== null) {
+                const parsed = parseFloat(attr);
+                if (!Number.isNaN(parsed)) {
+                    return parsed;
+                }
+            }
+            const text = priceCell.textContent || '';
+            const numeric = parseFloat(text.replace(/[^0-9.\-]/g, ''));
+            if (!Number.isNaN(numeric)) {
+                return numeric;
+            }
+        }
+        return 0;
+    };
+
+    const updateRowDisplay = (row, quantity) => {
+        row.dataset.currentQty = String(quantity);
+        const display = row.querySelector('[data-cart-qty-display]');
+        if (display) {
+            display.textContent = String(quantity);
+        }
+        const hidden = row.querySelector('[data-cart-qty-hidden]');
+        if (hidden) {
+            hidden.value = String(quantity);
+        }
+        const subtotalEl = row.querySelector('[data-cart-subtotal]');
+        if (subtotalEl) {
+            subtotalEl.textContent = formatCurrencyLocal(getUnitPrice(row) * quantity);
+        }
+    };
+
+    const updateTotalsDisplay = () => {
+        let total = 0;
+        cartForm.querySelectorAll('[data-cart-row]').forEach(row => {
+            if (!document.body.contains(row)) {
+                return;
+            }
+            const qty = parseInt(row.dataset.currentQty || '0', 10) || 0;
+            total += getUnitPrice(row) * qty;
+        });
+        if (totalElement) {
+            totalElement.textContent = formatCurrencyLocal(total);
+        }
+    };
+
+    const queuePending = (row, quantity) => {
+        row.dataset.pendingQty = String(quantity);
+    };
+
+    const flushPending = (row) => {
+        const pending = row.dataset.pendingQty;
+        if (pending !== undefined) {
+            delete row.dataset.pendingQty;
+            return parseInt(pending, 10) || 0;
+        }
+        return null;
+    };
+
+    const executeUpdate = (row, quantity) => {
+        const menuId = parseInt(row.dataset.menuId || '0', 10);
+        if (!menuId) {
+            return;
+        }
+        quantity = Math.max(0, quantity);
+        const previousQty = parseInt(row.dataset.currentQty || '0', 10);
+        if (quantity === previousQty && row.dataset.updating !== '1') {
+            return;
+        }
+
+        if (row.dataset.updating === '1') {
+            queuePending(row, quantity);
+            updateRowDisplay(row, quantity);
+            updateTotalsDisplay();
+            return;
+        }
+
+        updateRowDisplay(row, quantity);
+        updateTotalsDisplay();
+
+        const body = new URLSearchParams();
+        body.append('menu_id', String(menuId));
+        body.append('quantity', String(quantity));
+
+        row.dataset.updating = '1';
+
+        fetch('cart.php?action=update_item', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body
+        })
+            .then(resp => resp.text())
+            .then(text => {
+                const trimmed = text.trim();
+                if (!trimmed) {
+                    throw new Error('Unexpected empty response');
+                }
+                let data;
+                try {
+                    data = JSON.parse(trimmed);
+                } catch (error) {
+                    throw new Error('Unexpected response');
+                }
+                if (!data || !data.success) {
+                    throw new Error((data && data.message) || 'อัปเดตตะกร้าไม่สำเร็จ');
+                }
+
+                if (typeof data.count === 'number') {
+                    updateCartCount(data.count);
+                }
+
+                if (data.removed) {
+                    showFloatingAlert('นำเมนูออกจากตะกร้าแล้ว');
+                    row.remove();
+                    updateTotalsDisplay();
+                    if (data.count === 0) {
+                        window.location.reload();
+                    }
+                    return;
+                }
+
+                if (data.item) {
+                    const latestQty = parseInt(data.item.quantity, 10) || 0;
+                    updateRowDisplay(row, latestQty);
+                }
+
+                if (typeof data.total === 'number') {
+                    if (totalElement) {
+                        totalElement.textContent = formatCurrencyLocal(data.total);
+                    }
+                } else if (data.total_formatted) {
+                    if (totalElement) {
+                        totalElement.textContent = data.total_formatted;
+                    }
+                } else {
+                    updateTotalsDisplay();
+                }
+            })
+            .catch(error => {
+                showFloatingAlert(error.message || 'อัปเดตตะกร้าไม่สำเร็จ', 'error');
+                updateRowDisplay(row, previousQty);
+                updateTotalsDisplay();
+            })
+            .finally(() => {
+                row.dataset.updating = '0';
+                const pending = flushPending(row);
+                if (pending !== null && pending !== quantity) {
+                    executeUpdate(row, pending);
+                } else {
+                    updateTotalsDisplay();
+                }
+            });
+    };
+
+    cartForm.querySelectorAll('[data-cart-row]').forEach(row => {
+        const display = row.querySelector('[data-cart-qty-display]');
+        const hidden = row.querySelector('[data-cart-qty-hidden]');
+        const menuId = parseInt(row.dataset.menuId || '0', 10);
+        if (!display || !menuId) {
+            return;
+        }
+        const minus = row.querySelector('.qty-minus');
+        const plus = row.querySelector('.qty-plus');
+        const current = parseInt(display.textContent, 10) || 0;
+        row.dataset.currentQty = String(current);
+        if (hidden) {
+            hidden.value = String(current);
+        }
+
+        const handleStep = (delta) => {
+            const prev = parseInt(row.dataset.currentQty || '0', 10) || 0;
+            const next = Math.max(0, prev + delta);
+            executeUpdate(row, next);
+        };
+
+        if (minus) {
+            minus.addEventListener('click', () => handleStep(-1));
+        }
+        if (plus) {
+            plus.addEventListener('click', () => handleStep(1));
+        }
+    });
+
+    updateTotalsDisplay();
+}
+
+
+
+
+
+
+

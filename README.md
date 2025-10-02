@@ -1,27 +1,28 @@
-﻿# Big Apple Restaurant QR Ordering
+# Big Apple Restaurant QR Ordering
 
 โครงการเว็บสั่งอาหารด้วย QR Code สำหรับร้าน Big Apple (อาหารยุโรป + ไทย) พัฒนาบนสแต็ก XAMPP / PHP + MySQL พร้อมระบบหลังบ้านสำหรับจัดการออเดอร์และเมนู
 
 ## ฟีเจอร์หลัก
-- ลูกค้าสแกน QR → เลือกเมนู 5 หมวดหมู่ (อาหารไทย, Breakfast, Lunch, Dinner, Beverage)
-- จัดตะกร้า, ระบุโต๊ะ, เลือกชำระ (เงินสด / PromptPay / จ่ายทีหลัง)
-- รับหมายเลขออเดอร์และติดตามสถานะผ่านหน้าเว็บ
-- หลังบ้านสำหรับพนักงาน: ดูออเดอร์ใหม่, อัพเดทสถานะ/การชำระ, จัดการเมนู, รายงานยอดขาย
+- ลูกค้าสแกน QR แล้วระบบผูกโต๊ะอัตโนมัติจากพารามิเตอร์ `?table=T1`
+- เลือกเมนู 5 หมวดหมู่ (อาหารไทย, Breakfast, Lunch, Dinner, Beverage) และเพิ่มลงตะกร้าได้ทันที
+- เลือกวิธีชำระ (เงินสด / PromptPay / จ่ายทีหลัง) พร้อมรับหมายเลขออเดอร์และติดตามสถานะ
+- ปุ่มเรียกพนักงานเช็คบิล + ปุ่มติดตามสถานะออเดอร์ล่าสุดบนหน้าลูกค้า
+- หลังบ้าน: แดชบอร์ดออเดอร์, จัดการเมนู, รายงานยอดขาย, ภาพรวมโต๊ะ/ประวัติออเดอร์, ใบเสร็จพิมพ์ได้
 - รองรับแจ้งเตือนผ่าน Telegram Bot (เปิดใช้ได้เมื่อกรอก TOKEN + CHAT ID)
 
 ## โครงสร้างโฟลเดอร์
 ```
 assets/           ไฟล์ CSS / JS / รูปตัวอย่าง
-includes/         ฟังก์ชันส่วนกลาง (database, auth, cart, order, notification)
-public/           หน้าลูกค้า (index, cart, checkout, order status)
-admin/            หน้าหลังบ้าน (login, dashboard, orders, menu, sales)
+includes/         ฟังก์ชันส่วนกลาง (database, auth, cart, order, table, notification)
+public/           หน้าลูกค้า (index, cart, checkout, order status, table request)
+admin/            หน้าหลังบ้าน (login, dashboard, tables, orders, menu, sales)
 sql/bigapple_schema.sql  สคริปต์สร้างฐานข้อมูลและข้อมูลตัวอย่าง
 ```
 
 ## การตั้งค่าเบื้องต้น
 1. เปิด XAMPP และเริ่ม Apache + MySQL
 2. นำไฟล์โครงการไปไว้ที่ `htdocs/bigapple`
-3. เข้าสู่ phpMyAdmin แล้วรันไฟล์ `sql/bigapple_schema.sql`
+3. เข้าสู่ phpMyAdmin แล้วรันไฟล์ `sql/bigapple_schema.sql` (มีตาราง `table_service_requests` สำหรับปุ่มเรียกพนักงาน)
 4. ตั้งค่าไฟล์ `includes/config.php`
    - กำหนด HOST/USER/PASSWORD หากแตกต่างจากค่าเริ่มต้น
    - ใส่ `PROMPTPAY_ACCOUNT` สำหรับสร้าง QR ชำระเงิน
@@ -35,9 +36,14 @@ sql/bigapple_schema.sql  สคริปต์สร้างฐานข้อ�
 - Password: `12345`
 
 ## การสร้าง QR Code สำหรับแต่ละโต๊ะ
-1. ใช้ลิงก์ `http://localhost/bigapple/public/index.php?table=T1` (เพิ่มพารามิเตอร์ตามโต๊ะ)
+1. ใช้ลิงก์ `http://localhost/bigapple/public/index.php?table=T1` (เปลี่ยนรหัสโต๊ะตามจริง)
 2. ใช้เครื่องมือสร้าง QR (เช่น qrcode-monkey.com) แล้วพิมพ์ติดที่โต๊ะ
 3. สามารถกรอก `qr_code_url` ลงในตาราง `restaurant_tables` เพื่อเก็บอ้างอิงได้
+
+### การติดตามโต๊ะในหลังบ้าน
+- เข้าหน้า `Admin → โต๊ะ` เพื่อดูสถานะโต๊ะทั้งหมด, ออเดอร์ที่ยังไม่ปิด และคำขอบริการ
+- คลิกโต๊ะ (เช่น T1) เพื่อดูรายการอาหารทั้งหมด, ใบเสร็จพิมพ์ได้ และกดปุ่ม “เช็คบิลแล้ว” เพื่อปิดรอบโต๊ะ
+- ปุ่มเรียกพนักงานจากฝั่งลูกค้าจะสร้างรายการในตารางนี้เพื่อให้พนักงานตอบสนองได้เร็ว
 
 ## โลจิสติกส์การใช้งาน
 - **Phase 1 (สัปดาห์ 1):** ติดตั้ง XAMPP, import ฐานข้อมูล, ตรวจสอบ config
@@ -57,4 +63,3 @@ sql/bigapple_schema.sql  สคริปต์สร้างฐานข้อ�
 - ก่อนใช้งานจริง ให้เปลี่ยนรหัสผ่าน Admin และเพิ่มบัญชี Staff เพิ่มเติมในตาราง `users`
 - ตั้ง Cron Job สำรองฐานข้อมูล หรือใช้ phpMyAdmin export รายสัปดาห์
 - หากอัพโหลดขึ้น Shared Hosting ให้สร้างไฟล์ `.htaccess` เพื่อกำหนดโฟลเดอร์ public เป็น web root
-

@@ -157,3 +157,17 @@ function fetch_order_by_code(string $orderCode): ?array
     return $order;
 }
 
+function fetch_orders_by_table(int $tableId): array
+{
+    $pdo = get_db_connection();
+    $stmt = $pdo->prepare('SELECT * FROM orders WHERE table_id = :table ORDER BY created_at DESC');
+    $stmt->execute(['table' => $tableId]);
+    return $stmt->fetchAll();
+}
+
+function mark_table_orders_closed(int $tableId): void
+{
+    $pdo = get_db_connection();
+    $stmt = $pdo->prepare('UPDATE orders SET order_status = "served", payment_status = CASE WHEN payment_status = "pending" THEN "paid" ELSE payment_status END WHERE table_id = :table AND (order_status != "served" OR payment_status != "paid")');
+    $stmt->execute(['table' => $tableId]);
+}

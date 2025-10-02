@@ -50,14 +50,15 @@ if ($orderCode) {
     </section>
 
     <?php if ($order): ?>
-        <section class="glass-card">
+        <section class="glass-card" id="order-detail" data-order-code="<?= htmlspecialchars($order['order_code']); ?>">
             <h2 style="margin-top:0;">รายละเอียดออเดอร์</h2>
-            <p><strong>หมายเลข:</strong> #<?= htmlspecialchars($order['order_code']); ?></p>
-            <p><strong>โต๊ะ:</strong> <?= htmlspecialchars($order['table_number']); ?></p>
-            <p><strong>สถานะการชำระเงิน:</strong> <?= strtoupper($order['payment_status']); ?></p>
-            <p><strong>สถานะออเดอร์:</strong> <?= $statusLabel[$order['order_status']] ?? strtoupper($order['order_status']); ?></p>
+            <p><strong>หมายเลข:</strong> <span id="order-code-text">#<?= htmlspecialchars($order['order_code']); ?></span></p>
+            <p><strong>โต๊ะ:</strong> <span id="order-table-text"><?= htmlspecialchars($order['table_number']); ?></span></p>
+            <p><strong>สถานะการชำระเงิน:</strong> <span id="order-payment-status"><?= strtoupper($order['payment_status']); ?></span></p>
+            <p><strong>สถานะออเดอร์:</strong> <span id="order-status-text" data-status="<?= htmlspecialchars($order['order_status']); ?>"><?= $statusLabel[$order['order_status']] ?? strtoupper($order['order_status']); ?></span></p>
+            <p id="order-updated-at" style="color:rgba(71,85,105,0.65);font-size:0.9rem;">อัปเดตล่าสุด: <?= date('d/m H:i', strtotime($order['updated_at'] ?? $order['created_at'])); ?></p>
             <hr style="margin:1rem 0;border:0;border-top:1px solid rgba(148,163,184,0.25);">
-            <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:0.75rem;">
+            <ul id="order-items-list" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:0.75rem;">
                 <?php foreach ($order['items'] as $item): ?>
                     <li style="display:flex;justify-content:space-between;">
                         <span><?= htmlspecialchars($item['name']); ?> x <?= (int)$item['quantity']; ?></span>
@@ -67,7 +68,7 @@ if ($orderCode) {
             </ul>
             <p style="margin-top:1rem;font-weight:650;display:flex;justify-content:space-between;">
                 <span>ยอดรวม</span>
-                <span><?= format_currency((float)$order['total_amount']); ?></span>
+                <span id="order-total-amount"><?= format_currency((float)$order['total_amount']); ?></span>
             </p>
         </section>
     <?php elseif ($orderCode): ?>
@@ -79,5 +80,134 @@ if ($orderCode) {
 <footer>
     <p>© <?= date('Y'); ?> Big Apple Restaurant</p>
 </footer>
+<?php if ($order): ?>
+<script>
+(() => {
+    const orderDetailEl = document.getElementById('order-detail');
+    if (!orderDetailEl) {
+        return;
+    }
+    const STATUS_LABELS = <?= json_encode($statusLabel, JSON_UNESCAPED_UNICODE); ?>;
+    const PAYMENT_LABELS = { pending: 'PENDING', paid: 'PAID' };
+    const orderCode = orderDetailEl.dataset.orderCode;
+    const statusEl = document.getElementById('order-status-text');
+    const paymentEl = document.getElementById('order-payment-status');
+    const itemsListEl = document.getElementById('order-items-list');
+    const totalEl = document.getElementById('order-total-amount');
+    const updatedEl = document.getElementById('order-updated-at');
+    const tableEl = document.getElementById('order-table-text');
+    const codeEl = document.getElementById('order-code-text');
+    const currencyFormatter = new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' });
+
+    let pendingTimer = null;
+    let controller = null;
+
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',''':'&#39;'}[char]));
+    const renderItems = (items) => {
+        if (!Array.isArray(items)) {
+            return;
+        }
+        itemsListEl.innerHTML = items.map(item => {
+            const name = escapeHtml(item.name ?? '');
+            const qty = item.quantity ?? 0;
+            const subtotal = typeof item.subtotal === 'number' ? currencyFormatter.format(item.subtotal) : '-';
+            return `<li style="display:flex;justify-content:space-between;"><span>${name} x ${qty}</span><span>${subtotal}</span></li>`;
+        }).join('');
+    };
+
+    const applyOrder = (order) => {
+        if (!order) {
+            return;
+        }
+        if (order.order_code) {
+            codeEl.textContent = '#' + order.order_code;
+        }
+        if (order.table_number) {
+            tableEl.textContent = order.table_number;
+        }
+        if (order.order_status) {
+            const text = STATUS_LABELS[order.order_status] || order.order_status.toUpperCase();
+            statusEl.textContent = text;
+            statusEl.dataset.status = order.order_status;
+        }
+        if (order.payment_status) {
+            const label = PAYMENT_LABELS[order.payment_status] || order.payment_status.toUpperCase();
+            paymentEl.textContent = label;
+        }
+        if (typeof order.total_amount === 'number') {
+            totalEl.textContent = currencyFormatter.format(order.total_amount);
+        }
+        if (order.updated_at) {
+            try {
+                updatedEl.textContent = 'อัปเดตล่าสุด: ' + new Date(order.updated_at).toLocaleString('th-TH', { hour12: false });
+            } catch (error) {
+                updatedEl.textContent = 'อัปเดตล่าสุด: ' + order.updated_at;
+            }
+        }
+        renderItems(order.items || []);
+    };
+
+    const fetchLatestStatus = () => {
+        if (controller) {
+            controller.abort();
+        }
+        controller = new AbortController();
+        fetch(`api/order_status.php?order_code=${encodeURIComponent(orderCode)}`, {
+            signal: controller.signal,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('ไม่สามารถโหลดสถานะล่าสุดได้');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (!data.success || !data.order) {
+                    throw new Error(data.message || 'ไม่สามารถโหลดสถานะล่าสุดได้');
+                }
+                applyOrder(data.order);
+            })
+            .catch(error => {
+                if (error.name === 'AbortError') {
+                    return;
+                }
+                console.warn(error.message || error);
+            });
+    };
+
+    const startPolling = () => {
+        if (pendingTimer) {
+            return;
+        }
+        fetchLatestStatus();
+        pendingTimer = setInterval(fetchLatestStatus, 5000);
+    };
+
+    const stopPolling = () => {
+        if (pendingTimer) {
+            clearInterval(pendingTimer);
+            pendingTimer = null;
+        }
+        if (controller) {
+            controller.abort();
+            controller = null;
+        }
+    };
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            stopPolling();
+        } else {
+            startPolling();
+        }
+    });
+
+    window.addEventListener('beforeunload', stopPolling);
+
+    startPolling();
+})();
+</script>
+<?php endif; ?>
 </body>
 </html>

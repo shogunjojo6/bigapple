@@ -20,6 +20,7 @@ $activeMenu = $activeMenu ?? '';
         <p style="color:rgba(203,213,225,0.82);margin:0;">สวัสดี <?= htmlspecialchars($_SESSION['admin_username'] ?? ''); ?></p>
         <nav>
             <a href="dashboard.php" class="<?= $activeMenu === 'dashboard' ? 'active' : ''; ?>">แดชบอร์ด</a>
+            <a href="tables.php" class="<?= $activeMenu === 'tables' ? 'active' : ''; ?>">โต๊ะ</a>
             <a href="orders.php" class="<?= $activeMenu === 'orders' ? 'active' : ''; ?>">ออเดอร์</a>
             <a href="menu.php" class="<?= $activeMenu === 'menu' ? 'active' : ''; ?>">จัดการเมนู</a>
             <a href="sales.php" class="<?= $activeMenu === 'sales' ? 'active' : ''; ?>">รายงานยอดขาย</a>

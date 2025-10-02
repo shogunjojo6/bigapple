@@ -1,10 +1,11 @@
-﻿-- Big Apple Restaurant schema and seed data
+-- Big Apple Restaurant schema and seed data
 CREATE DATABASE IF NOT EXISTS bigapple_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE bigapple_db;
 
 DROP TABLE IF EXISTS order_status_logs;
 DROP TABLE IF EXISTS order_items;
 DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS table_service_requests;
 DROP TABLE IF EXISTS menus;
 DROP TABLE IF EXISTS categories;
 DROP TABLE IF EXISTS restaurant_tables;
@@ -25,6 +26,16 @@ CREATE TABLE restaurant_tables (
     qr_code_url VARCHAR(255) DEFAULT NULL,
     is_active TINYINT(1) DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE table_service_requests (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    table_id INT NOT NULL,
+    request_type ENUM('checkout','assistance') DEFAULT 'checkout',
+    status ENUM('open','closed') DEFAULT 'open',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    closed_at TIMESTAMP NULL,
+    FOREIGN KEY (table_id) REFERENCES restaurant_tables(id) ON DELETE CASCADE
 );
 
 CREATE TABLE categories (

@@ -7,7 +7,10 @@ if (cart_item_count() === 0) {
     exit;
 }
 
-$tables = fetch_restaurant_tables();
+$activeTable = get_active_table();
+if (!$activeTable) {
+    http_response_code(400);
+}
 $total = calculate_cart_total();
 ?>
 <!DOCTYPE html>
@@ -24,7 +27,7 @@ $total = calculate_cart_total();
         <div class="hero">
             <div>
                 <h1>ยืนยันออเดอร์</h1>
-                <p>เลือกโต๊ะและวิธีชำระเงินให้ครบก่อนส่งคำสั่งซื้อ</p>
+                <p>ตรวจสอบรายการและส่งคำสั่งซื้อ</p>
             </div>
             <div class="hero-actions">
                 <a class="btn btn-light" href="cart.php">← กลับไปตะกร้า</a>
@@ -53,16 +56,16 @@ $total = calculate_cart_total();
     </section>
 
     <form method="post" action="order_submit.php" class="glass-card" style="gap:1rem;display:flex;flex-direction:column;">
+        <input type="hidden" name="table_id" value="<?= $activeTable['id'] ?? '' ?>">
         <input type="hidden" name="total_amount" value="<?= $total; ?>">
+        <?php if (!$activeTable): ?>
+        <div class="alert alert-danger">ระบบไม่พบหมายเลขโต๊ะ กรุณาสแกน QR ใหม่หรือแจ้งพนักงาน</div>
+        <?php else: ?>
         <div class="form-group">
-            <label for="table_id">เลือกโต๊ะ</label>
-            <select name="table_id" id="table_id" class="form-control" required>
-                <option value="">-- กรุณาเลือก --</option>
-                <?php foreach ($tables as $table): ?>
-                    <option value="<?= $table['id']; ?>">โต๊ะ <?= htmlspecialchars($table['table_number']); ?></option>
-                <?php endforeach; ?>
-            </select>
+            <label>โต๊ะของคุณ</label>
+            <div class="form-control" style="background:rgba(248,250,252,0.9);font-weight:600;">โต๊ะ <?= htmlspecialchars($activeTable['table_number']); ?></div>
         </div>
+        <?php endif; ?>
         <div class="form-group">
             <label>วิธีการชำระเงิน</label>
             <div style="display:flex;flex-direction:column;gap:0.65rem;">
@@ -88,7 +91,7 @@ $total = calculate_cart_total();
             <label for="customer_note">หมายเหตุเพิ่มเติม</label>
             <textarea name="customer_note" id="customer_note" class="form-control" rows="3" placeholder="เช่น ไม่เผ็ด, ไม่ใส่ถั่ว"></textarea>
         </div>
-        <button class="btn btn-primary" type="submit" style="width:100%;">ยืนยันออเดอร์</button>
+        <button class="btn btn-primary" type="submit" style="width:100%;" <?= !$activeTable ? 'disabled' : '' ?>>ยืนยันออเดอร์</button>
     </form>
 </main>
 <footer>

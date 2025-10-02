@@ -13,6 +13,40 @@ try {
             add_to_cart($menuId, $quantity);
             header('Location: index.php?added=1');
             exit;
+        case 'update_item':
+            $menuId = (int)($_POST['menu_id'] ?? 0);
+            $quantity = max(0, (int)($_POST['quantity'] ?? 0));
+            if ($menuId <= 0) {
+                header('Content-Type: application/json', true, 400);
+                echo json_encode(['success' => false, 'message' => 'ไม่พบเมนูที่ต้องการปรับ']);
+                exit;
+            }
+            update_cart_item($menuId, $quantity);
+            $cartSnapshot = get_cart();
+            $updatedItem = null;
+            foreach ($cartSnapshot as $cartItem) {
+                if ((int)$cartItem['menu_id'] === $menuId) {
+                    $updatedItem = $cartItem;
+                    break;
+                }
+            }
+            $cartTotal = calculate_cart_total();
+            $cartCount = cart_item_count();
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => true,
+                'count' => $cartCount,
+                'total' => $cartTotal,
+                'total_formatted' => format_currency($cartTotal),
+                'removed' => $updatedItem === null,
+                'item' => $updatedItem ? [
+                    'menu_id' => (int)$updatedItem['menu_id'],
+                    'quantity' => (int)$updatedItem['quantity'],
+                    'subtotal' => (float)$updatedItem['subtotal'],
+                    'subtotal_formatted' => format_currency((float)$updatedItem['subtotal']),
+                ] : null,
+            ]);
+            exit;
         case 'update':
             foreach ($_POST['quantities'] ?? [] as $menuId => $qty) {
                 update_cart_item((int)$menuId, max(0, (int)$qty));
@@ -32,6 +66,11 @@ try {
             break;
     }
 } catch (Throwable $e) {
+    if ($action === 'update_item') {
+        header('Content-Type: application/json', true, 500);
+        echo json_encode(['success' => false, 'message' => 'ไม่สามารถจัดการตะกร้าได้ กรุณาลองใหม่อีกครั้ง']);
+        exit;
+    }
     $error = 'ไม่สามารถจัดการตะกร้าได้ กรุณาลองใหม่อีกครั้ง';
 }
 
@@ -77,7 +116,7 @@ $cartCount = cart_item_count();
             <a class="btn btn-primary" href="index.php">เลือกเมนูเพิ่ม</a>
         </section>
     <?php else: ?>
-        <form method="post" action="cart.php?action=update">
+        <form method="post" action="cart.php?action=update" data-cart-form>
             <table class="cart-table">
                 <thead>
                     <tr>
@@ -90,18 +129,19 @@ $cartCount = cart_item_count();
                 </thead>
                 <tbody>
                 <?php foreach ($cart as $item): ?>
-                    <tr>
-                        <td><?= htmlspecialchars($item['name']); ?></td>
-                        <td><?= format_currency((float)$item['unit_price']); ?></td>
-                        <td>
+                    <tr data-cart-row data-menu-id="<?= $item['menu_id']; ?>" data-unit-price="<?= (float)$item['unit_price']; ?>" data-current-qty="<?= (int)$item['quantity']; ?>">
+                        <td data-label="เมนู"><?= htmlspecialchars($item['name']); ?></td>
+                        <td data-label="ราคา" data-unit-price-cell data-unit-price="<?= (float)$item['unit_price']; ?>"><?= format_currency((float)$item['unit_price']); ?></td>
+                        <td data-label="จำนวน">
                             <div class="qty-control" data-qty-control>
                                 <button type="button" class="qty-minus" aria-label="ลดจำนวน">−</button>
-                                <input class="qty-input" type="number" inputmode="numeric" name="quantities[<?= $item['menu_id']; ?>]" value="<?= $item['quantity']; ?>" min="0">
+                                <span class="qty-display" data-cart-qty-display><?= $item['quantity']; ?></span>
+                                <input type="hidden" name="quantities[<?= $item['menu_id']; ?>]" value="<?= $item['quantity']; ?>" data-cart-qty-hidden>
                                 <button type="button" class="qty-plus" aria-label="เพิ่มจำนวน">+</button>
                             </div>
                         </td>
-                        <td><?= format_currency((float)$item['subtotal']); ?></td>
-                        <td>
+                        <td data-label="รวม"><span data-cart-subtotal><?= format_currency((float)$item['subtotal']); ?></span></td>
+                        <td data-label="" class="cart-row-actions">
                             <a class="btn btn-light" href="cart.php?action=remove&menu_id=<?= $item['menu_id']; ?>">ลบ</a>
                         </td>
                     </tr>
@@ -110,11 +150,10 @@ $cartCount = cart_item_count();
             </table>
             <div style="margin-top:1.75rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
                 <div style="display:flex;gap:0.65rem;flex-wrap:wrap;">
-                    <button class="btn btn-light" type="submit">อัพเดทตะกร้า</button>
                     <a class="btn btn-outline" href="cart.php?action=clear">ล้างตะกร้า</a>
                 </div>
                 <div style="text-align:right;">
-                    <p style="margin:0;font-size:1.2rem;font-weight:650;">ยอดสุทธิ: <?= format_currency($total); ?></p>
+                    <p style="margin:0;font-size:1.2rem;font-weight:650;">ยอดสุทธิ: <span id="cart-total-value" data-cart-total><?= format_currency($total); ?></span></p>
                     <div style="margin-top:0.85rem;display:flex;gap:0.65rem;flex-wrap:wrap;justify-content:flex-end;">
                         <a class="btn btn-outline" href="index.php">เลือกเมนูเพิ่ม</a>
                         <a class="btn btn-primary" href="checkout.php">ไปขั้นตอนยืนยันออเดอร์</a>
@@ -130,3 +169,4 @@ $cartCount = cart_item_count();
 <script src="../assets/js/main.js"></script>
 </body>
 </html>
+

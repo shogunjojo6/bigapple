@@ -5,6 +5,32 @@ $categories = fetch_categories();
 $cartCount = cart_item_count();
 $success = isset($_GET['added']) ? 'เพิ่มเมนูลงตะกร้าเรียบร้อยแล้ว' : null;
 $error = isset($_GET['error']) ? 'ไม่สามารถเพิ่มเมนูได้' : null;
+$activeTable = get_active_table();
+$lastOrderCode = $_SESSION['last_order_code'] ?? null;
+
+$orderStatusLabels = [
+    'pending' => 'รอรับออเดอร์',
+    'preparing' => 'กำลังทำอาหาร',
+    'ready' => 'พร้อมเสิร์ฟ',
+    'served' => 'เสิร์ฟแล้ว',
+];
+
+$paymentStatusLabels = [
+    'pending' => 'รอชำระเงิน',
+    'paid' => 'ชำระแล้ว',
+];
+
+$tableOrders = [];
+$openOrders = [];
+if ($activeTable) {
+    $tableOrders = fetch_orders_by_table((int)$activeTable['id']);
+    $openOrders = array_values(array_filter($tableOrders, function ($order) {
+        return $order['payment_status'] !== 'paid' || $order['order_status'] !== 'served';
+    }));
+}
+
+$displayOrders = !empty($openOrders) ? array_slice($openOrders, 0, 5) : [];
+$hasAdditionalOrders = count($openOrders) > count($displayOrders);
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -33,6 +59,63 @@ $error = isset($_GET['error']) ? 'ไม่สามารถเพิ่มเ�
     <span class="count-bubble" id="cart-count-floating"><?= $cartCount; ?></span>
     <span>🛒 ตะกร้า</span>
 </a>
+
+<?php if ($activeTable): ?>
+<div class="table-banner">
+    <div>
+        <span class="table-chip">🪑 โต๊ะ <?= htmlspecialchars($activeTable['table_number']); ?></span>
+        <?php if (!empty($lastOrderCode)): ?>
+        <span class="last-order">เลขออเดอร์ล่าสุด #<?= htmlspecialchars($lastOrderCode); ?></span>
+        <?php endif; ?>
+    </div>
+    <div class="table-banner-actions">
+        <a class="btn btn-outline" href="order_status.php<?php if (!empty($lastOrderCode)): ?>?order_code=<?= urlencode($lastOrderCode); ?><?php endif; ?>">ติดตามสถานะ</a>
+        <button type="button" class="btn btn-secondary" id="call-staff-btn">เรียกพนักงานเช็คบิล</button>
+    </div>
+</div>
+<?php else: ?>
+<div class="table-banner warning">
+    <span>ไม่พบหมายเลขโต๊ะ กรุณาสแกน QR หรือแจ้งพนักงานเพื่อเปิดโต๊ะ</span>
+</div>
+<?php endif; ?>
+<?php if ($activeTable && !empty($displayOrders)): ?>
+<section class="container table-orders-section fade-in">
+    <div class="surface-card table-orders-card">
+        <div class="table-orders-header">
+            <div>
+                <h2 style="margin:0;">ออเดอร์ของโต๊ะนี้</h2>
+                <p class="table-orders-subtitle">กดเลือกหมายเลขเพื่อดูรายละเอียดและติดตามสถานะ</p>
+            </div>
+            <span class="badge">ทั้งหมด <?= count($openOrders); ?> ออเดอร์</span>
+        </div>
+        <div class="table-orders-list">
+            <?php foreach ($displayOrders as $order): ?>
+                <?php
+                    $orderStatusKey = $order['order_status'];
+                    $paymentStatusKey = $order['payment_status'];
+                    $orderStatusText = $orderStatusLabels[$orderStatusKey] ?? strtoupper($orderStatusKey);
+                    $paymentStatusText = $paymentStatusLabels[$paymentStatusKey] ?? strtoupper($paymentStatusKey);
+                    $paymentClass = $paymentStatusKey === 'paid' ? 'paid' : 'pending-payment';
+                ?>
+                <a class="table-order-item" href="order_status.php?order_code=<?= urlencode($order['order_code']); ?>">
+                    <div class="table-order-item__top">
+                        <strong>#<?= htmlspecialchars($order['order_code']); ?></strong>
+                        <span class="status-pill <?= htmlspecialchars($orderStatusKey); ?>"><?= htmlspecialchars($orderStatusText); ?></span>
+                    </div>
+                    <p class="table-order-item__time">สั่งเมื่อ <?= date('d/m H:i', strtotime($order['created_at'])); ?></p>
+                    <div class="table-order-item__status">
+                        <span class="status-pill <?= htmlspecialchars($paymentClass); ?>"><?= htmlspecialchars($paymentStatusText); ?></span>
+                        <span class="table-order-item__chevron">ดูสถานะ →</span>
+                    </div>
+                </a>
+            <?php endforeach; ?>
+        </div>
+        <?php if ($hasAdditionalOrders): ?>
+            <p class="table-orders-note">แสดงเฉพาะ 5 ออเดอร์ล่าสุด หากต้องการดูเพิ่มเติมโปรดแจ้งพนักงาน</p>
+        <?php endif; ?>
+    </div>
+</section>
+<?php endif; ?>
 
 <main class="container stack-xl" style="padding:3rem 0 4rem;">
     <section class="surface-card fade-in">
