@@ -597,53 +597,121 @@ function buildQrImages_(d){
 function buildPdfHtml_(d, qr) {
   const qrBlock = (label, img, url) => {
     if (!img && !url) return '';
-    const imgTag = img ? `<img src="${img}" style="width:140px;height:140px;border:1px solid #e2e8f0;border-radius:8px;display:block;margin-bottom:6px;">` : '';
-    const urlText = url ? `<div style="font-size:12px;color:#334155;word-break:break-all;">${escape_(url)}</div>` : '';
-    return `<div style="margin-top:6px;">${escape_(label)}<br>${imgTag}${urlText}</div>`;
+    const imgTag = img ? `<img src="${img}" style="width:100px;height:100px;border:1px solid #ddd;padding:2px;display:block;margin-top:5px;">` : '';
+    const urlText = url ? `<div style="font-size:10px;color:#555;word-break:break-all;margin-top:2px;">${escape_(url)}</div>` : '';
+    return `<td style="vertical-align:top;width:33%;padding:5px;"><strong>${escape_(label)}</strong><br>${imgTag}${urlText}</td>`;
   };
-  const reasonBlock = d.status === 'Rejected' ? `<div><b>เหตุผลการ Reject:</b> ${escape_(d.rejectionReason || '')}</div>` : '';
+
+  const statusColor = d.status === 'Approved' ? '#198754' : (d.status === 'Rejected' ? '#dc3545' : '#ffc107');
+
   return `
   <html><head><style>
-    @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap');
-    body { font-family:'Kanit',sans-serif; padding:20px; color:#0f172a; }
-    h1 { margin:0 0 12px; }
-    .section { border:1px solid #e2e8f0; border-radius:10px; padding:12px; margin-bottom:12px; }
-    .row { display:flex; gap:8px; margin-bottom:6px; }
-    .col { flex:1; }
-    .label { font-weight:700; color:#475569; }
-    .badge { display:inline-block; padding:6px 10px; border-radius:20px; background:#ecfdf3; color:#166534; font-weight:700; }
+    @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;700&display=swap');
+    body { font-family:'Kanit', sans-serif; padding: 40px; color: #333; font-size: 14px; line-height: 1.5; }
+    .header { border-bottom: 2px solid #4e73df; padding-bottom: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+    .header h1 { margin: 0; color: #4e73df; font-size: 24px; }
+    .meta { font-size: 12px; color: #666; text-align: right; }
+    .box { border: 1px solid #ccc; border-radius: 4px; padding: 15px; margin-bottom: 20px; background-color: #fff; }
+    .box-title { font-weight: 700; color: #4e73df; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px; font-size: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    td { vertical-align: top; padding: 4px 8px; }
+    .label { font-weight: bold; color: #555; width: 140px; }
+    .value { color: #000; }
+    .status-stamp {
+      border: 2px solid ${statusColor};
+      color: ${statusColor};
+      font-weight: bold;
+      font-size: 18px;
+      padding: 5px 15px;
+      border-radius: 8px;
+      text-transform: uppercase;
+      display: inline-block;
+    }
+    .qr-table td { border: none; text-align: center; }
   </style></head><body>
-    <h1>ใบแจ้งขอใช้รถ</h1>
-    <div class="section">
-      <div class="row"><div class="col"><span class="label">วันที่ส่งคำขอ:</span> ${escape_(d.timestamp||'')}</div><div class="col"><span class="label">สถานะ:</span> <span class="badge">${escape_(d.status)}</span></div></div>
-      <div class="row"><div class="col"><span class="label">ผู้ขอ:</span> ${escape_(d.name)}</div><div class="col"><span class="label">อีเมล:</span> ${escape_(d.requesterEmail)}</div><div class="col"><span class="label">แผนก:</span> ${escape_(d.department)}</div></div>
-      <div class="row"><div class="col"><span class="label">ประเภทงาน:</span> ${escape_(d.workTypes)}</div></div>
-      <div class="row"><div class="col"><span class="label">ประเภทรถ:</span> ${escape_(d.vehicleTypes)}</div><div class="col"><span class="label">รถ/คัน:</span> ${escape_(d.car)}</div></div>
-      <div class="row"><div class="col"><span class="label">วันที่ใช้:</span> ${escape_(d.date)} เวลา ${escape_(d.startTime)}</div><div class="col"><span class="label">วันที่คืน:</span> ${escape_(d.returnDate || d.date)} เวลา ${escape_(d.returnTime || d.endTime)}</div></div>
+    <div class="header">
+      <div>
+        <h1>ใบขออนุญาตใช้รถยนต์</h1>
+        <div style="font-size:14px;color:#555;">บริษัท คิวทีซี เอนเนอร์ยี่ จำกัด (มหาชน)</div>
+      </div>
+      <div class="meta">
+        <div>เลขที่รายการ: #${d.timestamp ? new Date(d.timestamp).getTime().toString().substr(-6) : '-'}</div>
+        <div class="status-stamp">${escape_(d.status)}</div>
+      </div>
     </div>
-    <div class="section">
-      <div class="label">สถานที่รับ (ต้นทาง)</div>
-      <div class="row"><div class="col"><span class="label">สถานที่:</span> ${escape_(d.originPlace)}</div><div class="col"><span class="label">เหตุผล:</span> ${escape_(d.originReason)}</div></div>
-      <div class="row"><div class="col"><span class="label">ที่อยู่:</span> ${escape_(d.originAddress)}</div><div class="col"><span class="label">ผู้ติดต่อ/เบอร์:</span> ${escape_(d.originContact)}</div></div>
-      ${qrBlock('แผนที่ต้นทาง', qr.origin, d.originMap)}
+
+    <div class="box">
+      <div class="box-title">ข้อมูลผู้ขอใช้รถ</div>
+      <table>
+        <tr>
+          <td class="label">ชื่อผู้จอง:</td><td class="value">${escape_(d.name)}</td>
+          <td class="label">แผนก:</td><td class="value">${escape_(d.department)}</td>
+        </tr>
+        <tr>
+          <td class="label">อีเมล:</td><td class="value">${escape_(d.requesterEmail)}</td>
+          <td class="label">วันที่ทำรายการ:</td><td class="value">${escape_(d.timestamp)}</td>
+        </tr>
+      </table>
     </div>
-    <div class="section">
-      <div class="label">สถานที่ส่ง (ปลายทาง 1)</div>
-      <div class="row"><div class="col"><span class="label">สถานที่:</span> ${escape_(d.dest1Place)}</div><div class="col"><span class="label">เหตุผล:</span> ${escape_(d.dest1Reason)}</div></div>
-      <div class="row"><div class="col"><span class="label">ที่อยู่:</span> ${escape_(d.dest1Address)}</div><div class="col"><span class="label">ผู้ติดต่อ/เบอร์:</span> ${escape_(d.dest1Contact)}</div></div>
-      ${qrBlock('แผนที่ปลายทาง 1', qr.dest1, d.dest1Map)}
+
+    <div class="box">
+      <div class="box-title">รายละเอียดการเดินทาง</div>
+      <table>
+        <tr>
+          <td class="label">ประเภทงาน:</td><td class="value">${escape_(d.workTypes)}</td>
+        </tr>
+        <tr>
+          <td class="label">รถที่ใช้:</td><td class="value" colspan="3">${escape_(d.car)} (${escape_(d.vehicleTypes)})</td>
+        </tr>
+        <tr>
+          <td class="label">วันที่เริ่ม:</td><td class="value">${escape_(d.date)} เวลา ${escape_(d.startTime)}</td>
+          <td class="label">วันที่คืน:</td><td class="value">${escape_(d.returnDate || d.date)} เวลา ${escape_(d.returnTime || d.endTime)}</td>
+        </tr>
+      </table>
     </div>
-    ${d.dest2Place ? `
-    <div class="section">
-      <div class="label">สถานที่ส่ง (ปลายทาง 2)</div>
-      <div class="row"><div class="col"><span class="label">สถานที่:</span> ${escape_(d.dest2Place)}</div><div class="col"><span class="label">เหตุผล:</span> ${escape_(d.dest2Reason)}</div></div>
-      <div class="row"><div class="col"><span class="label">ที่อยู่:</span> ${escape_(d.dest2Address)}</div><div class="col"><span class="label">ผู้ติดต่อ/เบอร์:</span> ${escape_(d.dest2Contact)}</div></div>
-      ${qrBlock('แผนที่ปลายทาง 2', qr.dest2, d.dest2Map)}
-    </div>` : ''}
-    <div class="section"><div class="label">รายละเอียดเพิ่มเติม</div><div>${escape_(d.extraDetails || '-')}</div></div>
-    <div class="section">
-      <div class="row"><div class="col"><span class="label">ผู้อนุมัติ:</span> ${escape_(d.approver)}</div><div class="col"><span class="label">เวลาอนุมัติ:</span> ${escape_(d.approvedAt||'-')}</div></div>
-      ${reasonBlock}
+
+    <div class="box">
+      <div class="box-title">สถานที่ (Route)</div>
+      <table>
+        <tr><td colspan="2" style="border-bottom:1px dashed #eee; padding-top:10px;"><strong>1. ต้นทาง (Origin)</strong></td></tr>
+        <tr><td class="label">สถานที่:</td><td class="value">${escape_(d.originPlace)}</td></tr>
+        <tr><td class="label">ที่อยู่:</td><td class="value">${escape_(d.originAddress)}</td></tr>
+        <tr><td class="label">ผู้ติดต่อ:</td><td class="value">${escape_(d.originContact)}</td></tr>
+
+        <tr><td colspan="2" style="border-bottom:1px dashed #eee; padding-top:10px;"><strong>2. ปลายทาง (Destination 1)</strong></td></tr>
+        <tr><td class="label">สถานที่:</td><td class="value">${escape_(d.dest1Place)}</td></tr>
+        <tr><td class="label">ที่อยู่:</td><td class="value">${escape_(d.dest1Address)}</td></tr>
+        <tr><td class="label">ผู้ติดต่อ:</td><td class="value">${escape_(d.dest1Contact)}</td></tr>
+
+        ${d.dest2Place ? `
+        <tr><td colspan="2" style="border-bottom:1px dashed #eee; padding-top:10px;"><strong>3. ปลายทาง (Destination 2)</strong></td></tr>
+        <tr><td class="label">สถานที่:</td><td class="value">${escape_(d.dest2Place)}</td></tr>
+        <tr><td class="label">ที่อยู่:</td><td class="value">${escape_(d.dest2Address)}</td></tr>
+        <tr><td class="label">ผู้ติดต่อ:</td><td class="value">${escape_(d.dest2Contact)}</td></tr>` : ''}
+      </table>
+      <div style="margin-top:15px;">
+        <table class="qr-table">
+          <tr>
+            ${qrBlock('Map: ต้นทาง', qr.origin, d.originMap)}
+            ${qrBlock('Map: ปลายทาง 1', qr.dest1, d.dest1Map)}
+            ${d.dest2Place ? qrBlock('Map: ปลายทาง 2', qr.dest2, d.dest2Map) : ''}
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="box-title">การอนุมัติ</div>
+      <table>
+        <tr>
+          <td class="label">ผู้อนุมัติ:</td><td class="value">${escape_(d.approver || '-')}</td>
+          <td class="label">เวลาอนุมัติ:</td><td class="value">${escape_(d.approvedAt || '-')}</td>
+        </tr>
+        <tr>
+          <td class="label">หมายเหตุ:</td><td class="value">${escape_(d.extraDetails || '-')}</td>
+        </tr>
+        ${d.status === 'Rejected' ? `<tr><td class="label" style="color:red;">เหตุผลที่ปฏิเสธ:</td><td class="value" style="color:red;">${escape_(d.rejectionReason)}</td></tr>` : ''}
+      </table>
     </div>
   </body></html>`;
 }

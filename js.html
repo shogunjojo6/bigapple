@@ -359,16 +359,65 @@
     const ctx = document.getElementById(canvasId).getContext('2d');
     const labels = Object.keys(dataObj);
     const data = Object.values(dataObj);
-    const colors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796'];
+    const total = data.reduce((a, b) => a + b, 0);
+    const colors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796', '#5a5c69', '#f8f9fc'];
 
-    // Destroy old if exists
-    // (Simplification: Assuming global vars for chart instances)
+    const config = {
+      type,
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: colors
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                let val = context.raw || 0;
+                let pct = total > 0 ? ((val / total) * 100).toFixed(1) + '%' : '0%';
+                return `${context.label}: ${val} (${pct})`;
+              }
+            }
+          },
+          legend: {
+            position: 'bottom',
+            labels: {
+              generateLabels: function(chart) {
+                 const data = chart.data;
+                 if (data.labels.length && data.datasets.length) {
+                    return data.labels.map((label, i) => {
+                       const meta = chart.getDatasetMeta(0);
+                       const style = meta.controller.getStyle(i);
+                       const val = data.datasets[0].data[i];
+                       const pct = total > 0 ? ((val / total) * 100).toFixed(1) + '%' : '0%';
+                       return {
+                          text: `${label} - ${val} (${pct})`,
+                          fillStyle: style.backgroundColor,
+                          strokeStyle: style.borderColor,
+                          lineWidth: style.borderWidth,
+                          hidden: isNaN(data.datasets[0].data[i]) || meta.data[i].hidden,
+                          index: i
+                       };
+                    });
+                 }
+                 return [];
+              }
+            }
+          }
+        }
+      }
+    };
+
     if (canvasId === 'carChartCtx') {
       if (carChart) carChart.destroy();
-      carChart = new Chart(ctx, { type, data: { labels, datasets: [{ data, backgroundColor: colors }] } });
+      carChart = new Chart(ctx, config);
     } else {
       if (workChart) workChart.destroy();
-      workChart = new Chart(ctx, { type, data: { labels, datasets: [{ data, backgroundColor: colors }] } });
+      workChart = new Chart(ctx, config);
     }
   }
 
