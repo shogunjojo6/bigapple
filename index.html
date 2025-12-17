@@ -87,7 +87,7 @@
                   </div>
                   <div class="col-md-6">
                     <label class="form-label">เวลาเริ่ม</label>
-                    <input type="time" class="form-control" id="startTime" value="08:00" required>
+                    <input type="time" class="form-control" id="startTime" value="00:00" required>
                   </div>
                   <div class="col-md-6">
                     <label class="form-label">วันที่คืนรถ</label>
@@ -95,7 +95,7 @@
                   </div>
                   <div class="col-md-6">
                     <label class="form-label">เวลาคืน</label>
-                    <input type="time" class="form-control" id="returnTime" value="17:00" required>
+                    <input type="time" class="form-control" id="returnTime" value="00:00" required>
                   </div>
 
                   <div class="col-md-6">
@@ -359,6 +359,48 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Edit Modal -->
+  <div class="modal fade" id="editBookingModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">แก้ไขข้อมูลการจอง</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <form id="editForm">
+            <input type="hidden" id="editRowNumber">
+            <div class="row g-3">
+               <div class="col-md-6"><label>ชื่อผู้จอง</label><input class="form-control" id="editName" required></div>
+               <div class="col-md-6"><label>แผนก</label><input class="form-control" id="editDepartment" required></div>
+               <div class="col-md-6"><label>อีเมล</label><input class="form-control" id="editEmail" required></div>
+               <div class="col-md-6"><label>วันที่เริ่ม</label><input type="date" class="form-control" id="editDate" required></div>
+               <div class="col-md-6"><label>เวลาเริ่ม</label><input type="time" class="form-control" id="editStartTime" required></div>
+               <div class="col-md-6"><label>วันที่คืน</label><input type="date" class="form-control" id="editReturnDate" required></div>
+               <div class="col-md-6"><label>เวลาคืน</label><input type="time" class="form-control" id="editReturnTime" required></div>
+               <div class="col-md-6"><label>ประเภทรถ</label>
+                  <select class="form-select" id="editVehicleType">
+                    <option value="[รถ 6 ล้อ][ISUZU][83-0506 ระยอง]">[รถ 6 ล้อ][ISUZU][83-0506 ระยอง]</option>
+                    <option value="[รถกระบะ][ISUZU][3ฒษ2096 กทม.]">[รถกระบะ][ISUZU][3ฒษ2096 กทม.]</option>
+                    <option value="[รถกระบะ][TOYOTA Hilux Champ][4ฒก9851 กทม.]">[รถกระบะ][TOYOTA Hilux Champ][4ฒก9851 กทม.]</option>
+                    <option value="[รถยนต์][TOYOTA YARISS][3ขข8315 กทม.]">[รถยนต์][TOYOTA YARISS][3ขข8315 กทม.]</option>
+                    <option value="อื่นๆ ให้ระบุ">อื่นๆ ให้ระบุ</option>
+                  </select>
+               </div>
+               <div class="col-md-6"><label>ปลายทาง 1</label><input class="form-control" id="editDest1Place" required></div>
+               <div class="col-12"><label>รายละเอียดเพิ่มเติม</label><textarea class="form-control" id="editExtraDetails"></textarea></div>
+               <!-- Simplified edit form, focusing on key fields -->
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-primary" onclick="submitEdit()">Save changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <?!= include('js'); ?>
 </body>
