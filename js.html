@@ -234,16 +234,16 @@
   }
 
   function getAdminButtons(b) {
-    // Show actions for ALL statuses to allow correction
-    // Always show PDF if Approved/Rejected
     let html = '';
 
-    // Edit Button (Content)
-    html += `<button class="btn btn-sm btn-warning text-white me-1" onclick='openEditModal(${JSON.stringify(JSON.stringify(b))})' title="แก้ไขข้อมูล"><i class="fas fa-edit"></i></button>`;
-
-    // Status Buttons (Approve/Reject)
-    html += `<button class="btn btn-sm btn-success me-1" onclick="approveBooking(${b.rowNumber})" title="อนุมัติ"><i class="fas fa-check"></i></button>`;
-    html += `<button class="btn btn-sm btn-danger me-1" onclick="rejectBooking(${b.rowNumber})" title="ปฏิเสธ"><i class="fas fa-times"></i></button>`;
+    // Status Buttons (Approve/Reject) for Pending items
+    if (b.status === 'Pending') {
+      html += `<button class="btn btn-sm btn-success me-1" onclick="approveBooking(${b.rowNumber})" title="อนุมัติ"><i class="fas fa-check"></i></button>`;
+      html += `<button class="btn btn-sm btn-danger me-1" onclick="rejectBooking(${b.rowNumber})" title="ปฏิเสธ"><i class="fas fa-times"></i></button>`;
+    } else {
+      // For Approved/Rejected: Edit Status button
+      html += `<button class="btn btn-sm btn-warning text-white me-1" onclick="editStatus(${b.rowNumber}, '${b.status}')" title="แก้ไขสถานะ"><i class="fas fa-pen"></i></button>`;
+    }
 
     // PDF Button
     if (b.status === 'Approved' || b.status === 'Rejected') {
@@ -252,95 +252,31 @@
     return html;
   }
 
-  function openEditModal(json) {
-     const b = JSON.parse(json);
-     document.getElementById('editRowNumber').value = b.rowNumber;
-     document.getElementById('editName').value = b.name;
-     document.getElementById('editDepartment').value = b.department;
-     document.getElementById('editEmail').value = b.requesterEmail || '';
-     document.getElementById('editDate').value = b.date; // Ensure YYYY-MM-DD
-     document.getElementById('editStartTime').value = b.startTime;
-     document.getElementById('editReturnDate').value = b.returnDate;
-     document.getElementById('editReturnTime').value = b.returnTime;
-
-     // Handle vehicle select
-     const vSelect = document.getElementById('editVehicleType');
-     // If not in options, set to 'อื่นๆ' (Logic simplified, assumes exact match or Other)
-     let found = false;
-     for(let i=0; i<vSelect.options.length; i++){
-        if(vSelect.options[i].value === b.car) {
-           vSelect.selectedIndex = i;
-           found = true;
-           break;
+  function editStatus(row, currentStatus) {
+    Swal.fire({
+      title: 'แก้ไขสถานะ',
+      text: `สถานะปัจจุบัน: ${currentStatus}`,
+      showDenyButton: true,
+      showCancelButton: true,
+      confirmButtonText: 'Approve',
+      denyButtonText: 'Reject',
+      confirmButtonColor: '#1cc88a',
+      denyButtonColor: '#e74a3b'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        if (currentStatus === 'Approved') {
+           Swal.fire('รายการนี้ Approved อยู่แล้ว', '', 'info');
+           return;
         }
-     }
-     if(!found) vSelect.value = "อื่นๆ ให้ระบุ";
-
-     document.getElementById('editDest1Place').value = b.dest1Place;
-     document.getElementById('editExtraDetails').value = b.extraDetails;
-
-     new bootstrap.Modal(document.getElementById('editBookingModal')).show();
-  }
-
-  function submitEdit() {
-     const row = document.getElementById('editRowNumber').value;
-     const formData = {
-        name: document.getElementById('editName').value,
-        department: document.getElementById('editDepartment').value,
-        email: document.getElementById('editEmail').value,
-        date: document.getElementById('editDate').value,
-        startTime: document.getElementById('editStartTime').value,
-        returnDate: document.getElementById('editReturnDate').value,
-        returnTime: document.getElementById('editReturnTime').value,
-        car: document.getElementById('editVehicleType').value,
-        vehicleTypes: document.getElementById('editVehicleType').value, // Simplified mapping
-        workTypes: 'แก้ไขโดย Admin', // Simplified, or fetch original if needed. But let's just use existing logic?
-        // Note: workTypes is not in the modal to keep it simple, but required by backend mapping.
-        // Let's assume we don't change workTypes in this simple edit form, OR we need to add it.
-        // For now, let's just pass what we have.
-        // Wait, backend 'updateBookingDetails' replaces Range 1 (Col 2-6): Name, Dept, WorkTypes, VehicleTypes, Car.
-        // If I send 'undefined' workTypes, it might break.
-        // I need to read the current workType from the object passed to openEditModal?
-        // Better: Add workTypes to the modal or just accept it might be overwritten.
-        // Let's add WorkTypes hidden or explicit.
-        // For robustness, I will just hardcode 'ไม่ระบุ' if missing, or better, add the field to modal.
-     };
-     // Re-check formData requirements.
-     // In openEditModal, I have the full 'b' object. I should store it or add the field.
-     // Let's just add workTypes to the modal quickly in logic or UI.
-     // I'll add a hidden input for workTypes in js logic (not UI) by fetching from global array?
-     // Easier: Just add workTypes input to the modal?
-     // Or, finding the booking in 'allBookings' array by rowNumber.
-     const original = allBookings.find(b => b.rowNumber == row);
-     if(original) {
-        formData.workTypes = original.workTypes;
-        formData.originPlace = original.originPlace; // Keep original if not edited
-        formData.originAddress = original.originAddress;
-        formData.originContact = original.originContact;
-        formData.originReason = original.originReason;
-        formData.originMap = original.originMap;
-        formData.dest1Address = original.dest1Address;
-        formData.dest1Contact = original.dest1Contact;
-        formData.dest1Reason = original.dest1Reason;
-        formData.dest1Map = original.dest1Map;
-        formData.dest2Place = original.dest2Place;
-        formData.dest2Address = original.dest2Address;
-        formData.dest2Contact = original.dest2Contact;
-        formData.dest2Reason = original.dest2Reason;
-        formData.dest2Map = original.dest2Map;
-     }
-
-     // Override with edited fields
-     formData.dest1Place = document.getElementById('editDest1Place').value;
-     formData.extraDetails = document.getElementById('editExtraDetails').value;
-
-     showLoading(true);
-     // Hide modal
-     bootstrap.Modal.getInstance(document.getElementById('editBookingModal')).hide();
-
-     google.script.run
-        .withSuccessHandler(afterUpdate)
-        .updateBookingDetails(row, formData, adminToken);
+        approveBooking(row);
+      } else if (result.isDenied) {
+        if (currentStatus === 'Rejected') {
+           Swal.fire('รายการนี้ Rejected อยู่แล้ว', '', 'info');
+           return;
+        }
+        rejectBooking(row);
+      }
+    });
   }
 
   function approveBooking(row) {
