@@ -29,7 +29,7 @@
     document.getElementById('adminLoginBtn').addEventListener('click', showAdminLogin);
 
     // Filter Inputs
-    ['searchFilter', 'statusFilter', 'carFilter', 'filterStartDate', 'filterEndDate'].forEach(id => {
+    ['searchFilter', 'statusFilter', 'carFilter', 'workTypeFilter', 'filterStartDate', 'filterEndDate'].forEach(id => {
       document.getElementById(id).addEventListener('input', renderBookingsTable);
     });
   }
@@ -152,6 +152,7 @@
     const filterText = val('searchFilter').toLowerCase();
     const filterStatus = val('statusFilter');
     const filterCar = val('carFilter');
+    const filterWork = val('workTypeFilter');
 
     const filterStart = document.getElementById('filterStartDate').value;
     const filterEnd = document.getElementById('filterEndDate').value;
@@ -162,12 +163,19 @@
       // Dropdown Filters
       const matchStatus = filterStatus === 'all' || b.status === filterStatus;
       const matchCar = filterCar === 'all' || b.car === filterCar;
+      // Work Type Filter
+      let matchWork = true;
+      if (filterWork !== 'all') {
+         // Use includes to match "อื่นๆ: ..." or exact matches
+         matchWork = String(b.workTypes).includes(filterWork);
+      }
+
       // Date Range Filter
       let matchDate = true;
       if (filterStart) matchDate = matchDate && (b.date >= filterStart);
       if (filterEnd) matchDate = matchDate && (b.date <= filterEnd); // Assuming b.date is YYYY-MM-DD format
 
-      return matchText && matchStatus && matchCar && matchDate;
+      return matchText && matchStatus && matchCar && matchWork && matchDate;
     });
 
     if (filtered.length === 0) {
