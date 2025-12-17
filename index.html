@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meeting Room Booking System</title>
+  <!-- Bootstrap 5 CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- FontAwesome CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- SweetAlert2 CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <!-- Custom CSS -->
+  <?!= include('css'); ?>
+</head>
+
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">Meeting Room Booking</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link active" aria-current="page" href="#">Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#myBookingsModal">My Bookings</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container mt-5">
+    <div class="row" id="room-list">
+      <!-- Rooms will be dynamically loaded here -->
+    </div>
+  </div>
+
+  <!-- Booking Modal -->
+  <div class="modal fade" id="bookingModal" tabindex="-1" aria-labelledby="bookingModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="bookingModalLabel">Book a Room</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form id="booking-form">
+            <input type="hidden" id="room-name" name="roomName">
+            <div class="mb-3">
+              <label for="meeting-title" class="form-label">Meeting Title</label>
+              <input type="text" class="form-control" id="meeting-title" required>
+            </div>
+            <div class="mb-3">
+              <label for="booker-name" class="form-label">Your Name</label>
+              <input type="text" class="form-control" id="booker-name" required>
+            </div>
+            <div class="mb-3">
+              <label for="booker-email" class="form-label">Your Email</label>
+              <input type="email" class="form-control" id="booker-email" required>
+            </div>
+            <div class="mb-3">
+              <label for="start-time" class="form-label">Start Time</label>
+              <input type="datetime-local" class="form-control" id="start-time" required>
+            </div>
+            <div class="mb-3">
+              <label for="end-time" class="form-label">End Time</label>
+              <input type="datetime-local" class="form-control" id="end-time" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Confirm Booking</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- My Bookings Modal -->
+  <div class="modal fade" id="myBookingsModal" tabindex="-1" aria-labelledby="myBookingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="myBookingsModalLabel">My Bookings</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form id="my-bookings-form">
+            <div class="input-group mb-3">
+              <input type="email" class="form-control" id="my-bookings-email" placeholder="Enter your email to see your bookings" required>
+              <button class="btn btn-outline-secondary" type="submit">Search</button>
+            </div>
+          </form>
+          <div id="my-bookings-list">
+            <!-- User's bookings will be loaded here -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Bootstrap 5 JS Bundle with Popper -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Custom JS -->
+  <?!= include('js'); ?>
+</body>
+
+</html>

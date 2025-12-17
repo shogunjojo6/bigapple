@@ -1,0 +1,110 @@
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    loadRooms();
+    document.getElementById("booking-form").addEventListener("submit", handleBookingSubmit);
+    document.getElementById("my-bookings-form").addEventListener("submit", handleMyBookingsSearch);
+  });
+
+  function showLoader() {
+    const loader = document.createElement("div");
+    loader.className = "loader";
+    document.getElementById("room-list").appendChild(loader);
+  }
+
+  function hideLoader() {
+    const loader = document.querySelector(".loader");
+    if (loader) {
+      loader.remove();
+    }
+  }
+
+  function loadRooms() {
+    showLoader();
+    google.script.run.withSuccessHandler(rooms => {
+      hideLoader();
+      const roomList = document.getElementById("room-list");
+      roomList.innerHTML = ""; // Clear existing rooms
+      rooms.forEach(room => {
+        const card = `
+          <div class="col-md-4 mb-4">
+            <div class="card room-card">
+              <img src="${room.photoUrl}" class="card-img-top" alt="${room.name}">
+              <div class="card-body">
+                <h5 class="card-title">${room.name}</h5>
+                <p class="card-text">Capacity: ${room.capacity}</p>
+                <p class="card-text">Facilities: ${room.facilities}</p>
+                <button class="btn btn-primary" onclick="openBookingModal('${room.name}')">Book Now</button>
+              </div>
+            </div>
+          </div>
+        `;
+        roomList.innerHTML += card;
+      });
+    }).getRooms();
+  }
+
+  function openBookingModal(roomName) {
+    document.getElementById("room-name").value = roomName;
+    document.getElementById("bookingModalLabel").innerText = `Book: ${roomName}`;
+    new bootstrap.Modal(document.getElementById('bookingModal')).show();
+  }
+
+  function handleBookingSubmit(event) {
+    event.preventDefault();
+    const bookingDetails = {
+      roomName: document.getElementById("room-name").value,
+      title: document.getElementById("meeting-title").value,
+      name: document.getElementById("booker-name").value,
+      email: document.getElementById("booker-email").value,
+      start: document.getElementById("start-time").value,
+      end: document.getElementById("end-time").value,
+    };
+
+    Swal.fire({
+      title: 'Processing...',
+      text: 'Please wait while we confirm your booking.',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
+    google.script.run.withSuccessHandler(response => {
+      if (response.success) {
+        Swal.fire('Success!', response.message, 'success');
+        bootstrap.Modal.getInstance(document.getElementById('bookingModal')).hide();
+        document.getElementById("booking-form").reset();
+      } else {
+        Swal.fire('Error!', response.message, 'error');
+      }
+    }).bookRoom(bookingDetails);
+  }
+
+  function handleMyBookingsSearch(event) {
+    event.preventDefault();
+    const email = document.getElementById("my-bookings-email").value;
+    google.script.run.withSuccessHandler(bookings => {
+      const bookingsList = document.getElementById("my-bookings-list");
+      bookingsList.innerHTML = "";
+      if (bookings.length > 0) {
+        bookings.forEach(booking => {
+          const bookingItem = `
+            <div class="card mb-3">
+              <div class="card-body">
+                <h5 class="card-title">${booking.title}</h5>
+                <p class="card-text">${booking.roomName}</p>
+                <p class="card-text">
+                  From: ${new Date(booking.start).toLocaleString()} <br>
+                  To: ${new Date(booking.end).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          `;
+          bookingsList.innerHTML += bookingItem;
+        });
+      } else {
+        bookingsList.innerHTML = "<p>No bookings found for this email.</p>";
+      }
+    }).getMyBookings(email);
+  }
+</script>
