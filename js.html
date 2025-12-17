@@ -1,0 +1,417 @@
+<script>
+  // Global State
+  let allBookings = [];
+  let isAdmin = false;
+  let adminToken = '';
+
+  // Charts Instances
+  let carChart = null;
+  let workChart = null;
+
+  document.addEventListener('DOMContentLoaded', function() {
+    loadBookings();
+    initEventListeners();
+
+    // Set default dates for stats
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    document.getElementById('statStart').valueAsDate = firstDay;
+    document.getElementById('statEnd').valueAsDate = today;
+    loadStats();
+  });
+
+  function initEventListeners() {
+    // Form Submission
+    const form = document.getElementById('bookingForm');
+    form.addEventListener('submit', handleFormSubmit);
+
+    // Dynamic Form Fields
+    document.getElementById('vehicleType').addEventListener('change', toggleOtherVehicle);
+    document.getElementById('workType').addEventListener('change', toggleOtherWork);
+
+    // Admin Login
+    document.getElementById('adminLoginBtn').addEventListener('click', showAdminLogin);
+
+    // Filter Inputs
+    ['searchFilter', 'statusFilter', 'carFilter', 'filterStartDate', 'filterEndDate'].forEach(id => {
+      document.getElementById(id).addEventListener('input', renderBookingsTable);
+    });
+  }
+
+  function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  // --- Core Functions ---
+
+  function showLoading(show = true) {
+    document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+  }
+
+  function handleFormSubmit(e) {
+    e.preventDefault();
+    if (!this.checkValidity()) {
+      e.stopPropagation();
+      this.classList.add('was-validated');
+      return;
+    }
+
+    // Collect Data
+    const formData = {
+      name: val('name'),
+      department: val('department'),
+      email: val('email'),
+      date: val('date'),
+      startTime: val('startTime'),
+      returnDate: val('returnDate'),
+      returnTime: val('returnTime'),
+
+      originPlace: val('originPlace'),
+      originReason: val('originReason'),
+      originAddress: val('originAddress'),
+      originContact: val('originContact'),
+      originMap: val('originMap'),
+
+      dest1Place: val('dest1Place'),
+      dest1Reason: val('dest1Reason'),
+      dest1Address: val('dest1Address'),
+      dest1Contact: val('dest1Contact'),
+      dest1Map: val('dest1Map'),
+
+      dest2Place: val('dest2Place'),
+      dest2Reason: val('dest2Reason'),
+      dest2Address: val('dest2Address'),
+      dest2Contact: val('dest2Contact'),
+      dest2Map: val('dest2Map'),
+
+      extraDetails: val('extraDetails'),
+    };
+
+    // Handle "Other" logic
+    const vType = val('vehicleType');
+    formData.vehicleTypes = (vType === 'อื่นๆ ให้ระบุ' || vType === 'other') ? `อื่นๆ: ${val('vehicleOther')}` : vType;
+    formData.car = formData.vehicleTypes; // In original logic, car == vehicleTypes mostly
+
+    const wType = val('workType');
+    formData.workTypes = (wType === 'otherWork') ? `อื่นๆ: ${val('workOther')}` : wType;
+
+    showLoading(true);
+    google.script.run
+      .withSuccessHandler(res => {
+        showLoading(false);
+        if (res.success) {
+          Swal.fire('สำเร็จ!', res.message, 'success');
+          document.getElementById('bookingForm').reset();
+          document.getElementById('bookingForm').classList.remove('was-validated');
+          // Switch to list tab
+          new bootstrap.Tab(document.querySelector('#nav-list-tab')).show();
+          loadBookings();
+        } else {
+          Swal.fire('เกิดข้อผิดพลาด', res.message, 'error');
+        }
+      })
+      .withFailureHandler(err => {
+        showLoading(false);
+        Swal.fire('Error', 'Server connection failed: ' + err.message, 'error');
+      })
+      .submitBooking(formData);
+  }
+
+  function loadBookings() {
+    showLoading(true);
+    google.script.run
+      .withSuccessHandler(res => {
+        showLoading(false);
+        if (res.ok) {
+          allBookings = res.bookings;
+          isAdmin = res.isAdmin; // Server-side detection
+          updateUIForAdmin();
+          renderBookingsTable();
+        } else {
+          console.error(res.error);
+        }
+      })
+      .withFailureHandler(err => {
+        showLoading(false);
+        console.error(err);
+      })
+      .getBookings();
+  }
+
+  function renderBookingsTable() {
+    const tbody = document.getElementById('bookingTableBody');
+    tbody.innerHTML = '';
+
+    const filterText = val('searchFilter').toLowerCase();
+    const filterStatus = val('statusFilter');
+    const filterCar = val('carFilter');
+
+    const filterStart = document.getElementById('filterStartDate').value;
+    const filterEnd = document.getElementById('filterEndDate').value;
+
+    const filtered = allBookings.filter(b => {
+      // Text Filter
+      const matchText = [b.name, b.department, b.dest1Place, b.car].some(s => String(s).toLowerCase().includes(filterText));
+      // Dropdown Filters
+      const matchStatus = filterStatus === 'all' || b.status === filterStatus;
+      const matchCar = filterCar === 'all' || b.car === filterCar;
+      // Date Range Filter
+      let matchDate = true;
+      if (filterStart) matchDate = matchDate && (b.date >= filterStart);
+      if (filterEnd) matchDate = matchDate && (b.date <= filterEnd); // Assuming b.date is YYYY-MM-DD format
+
+      return matchText && matchStatus && matchCar && matchDate;
+    });
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4">ไม่พบข้อมูลการจอง</td></tr>';
+      return;
+    }
+
+    filtered.forEach(b => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><div class="fw-bold">${escapeHtml(b.date)}</div><small class="text-muted">${escapeHtml(b.startTime)} - ${escapeHtml(b.endTime)}</small></td>
+        <td><div class="fw-bold">${escapeHtml(b.name)}</div><small>${escapeHtml(b.department)}</small></td>
+        <td>${escapeHtml(b.car)}</td>
+        <td>${escapeHtml(b.dest1Place)}</td>
+        <td>${escapeHtml(b.workTypes)}</td>
+        <td><span class="status-badge ${getStatusClass(b.status)}">${escapeHtml(b.status)}</span></td>
+        <td>
+          <button class="btn btn-sm btn-info text-white me-1" onclick='viewDetail(${JSON.stringify(JSON.stringify(b))})'><i class="fas fa-eye"></i></button>
+          ${isAdmin ? getAdminButtons(b) : ''}
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // --- Admin Functions ---
+
+  function showAdminLogin() {
+    Swal.fire({
+      title: 'Admin Login',
+      input: 'password',
+      inputLabel: 'Password',
+      inputPlaceholder: 'Enter your password',
+      showCancelButton: true,
+      confirmButtonText: 'Login',
+      showLoaderOnConfirm: true,
+      preConfirm: (pass) => {
+        return new Promise((resolve) => {
+          google.script.run
+            .withSuccessHandler(res => {
+               if(res.success) resolve(pass);
+               else Swal.showValidationMessage('รหัสผ่านไม่ถูกต้อง');
+            })
+            .adminLogin(pass);
+        });
+      },
+      allowOutsideClick: () => !Swal.isLoading()
+    }).then((result) => {
+      if (result.isConfirmed) {
+        isAdmin = true;
+        adminToken = result.value;
+        updateUIForAdmin();
+        renderBookingsTable();
+        Swal.fire('Logged in', 'เข้าสู่ระบบผู้ดูแลสำเร็จ', 'success');
+      }
+    });
+  }
+
+  function updateUIForAdmin() {
+    if (isAdmin) {
+      document.getElementById('adminTabLink').classList.remove('d-none');
+      document.getElementById('adminLoginBtn').classList.add('d-none');
+    }
+  }
+
+  function getAdminButtons(b) {
+    if (b.status === 'Pending') {
+      return `
+        <button class="btn btn-sm btn-success me-1" onclick="approveBooking(${b.rowNumber})"><i class="fas fa-check"></i></button>
+        <button class="btn btn-sm btn-danger" onclick="rejectBooking(${b.rowNumber})"><i class="fas fa-times"></i></button>
+      `;
+    } else if (b.status === 'Approved' || b.status === 'Rejected') {
+      return `<button class="btn btn-sm btn-secondary" onclick="exportPdf(${b.rowNumber})"><i class="fas fa-file-pdf"></i></button>`;
+    }
+    return '';
+  }
+
+  function approveBooking(row) {
+    Swal.fire({
+      title: 'ยืนยันการอนุมัติ?',
+      text: "ระบบจะลงปฏิทินและแจ้งเตือนผู้จอง",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#1cc88a',
+      confirmButtonText: 'อนุมัติ'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        showLoading(true);
+        google.script.run.withSuccessHandler(afterUpdate).updateBookingStatus(row, 'Approved', null, adminToken);
+      }
+    });
+  }
+
+  function rejectBooking(row) {
+    Swal.fire({
+      title: 'ปฏิเสธคำขอ',
+      input: 'text',
+      inputLabel: 'ระบุเหตุผล',
+      showCancelButton: true,
+      confirmButtonColor: '#e74a3b',
+      confirmButtonText: 'ปฏิเสธ'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        showLoading(true);
+        google.script.run.withSuccessHandler(afterUpdate).updateBookingStatus(row, 'Rejected', result.value, adminToken);
+      }
+    });
+  }
+
+  function afterUpdate(res) {
+    showLoading(false);
+    if (res.success) {
+      Swal.fire('เรียบร้อย', res.message, 'success');
+      loadBookings();
+    } else {
+      Swal.fire('ผิดพลาด', res.message, 'error');
+    }
+  }
+
+  function exportPdf(row) {
+    showLoading(true);
+    google.script.run
+      .withSuccessHandler(res => {
+        showLoading(false);
+        if (res.success) {
+          const link = document.createElement('a');
+          link.href = 'data:application/pdf;base64,' + res.data;
+          link.download = res.filename;
+          link.click();
+        } else {
+          Swal.fire('Error', res.message, 'error');
+        }
+      })
+      .generateBookingPdf(row);
+  }
+
+  // --- Statistics & Dashboard ---
+
+  function loadStats() {
+    const start = document.getElementById('statStart').value;
+    const end = document.getElementById('statEnd').value;
+
+    google.script.run.withSuccessHandler(renderStats).getStats(start, end);
+  }
+
+  function renderStats(data) {
+    if (!data.success) return;
+    document.getElementById('totalBookings').innerText = data.total;
+
+    updateChart('carChartCtx', data.byCar, 'รถที่ถูกใช้งานมากที่สุด');
+    updateChart('workChartCtx', data.byWork, 'ประเภทงานยอดนิยม', 'doughnut');
+  }
+
+  function updateChart(canvasId, dataObj, label, type='pie') {
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    const labels = Object.keys(dataObj);
+    const data = Object.values(dataObj);
+    const colors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796'];
+
+    // Destroy old if exists
+    // (Simplification: Assuming global vars for chart instances)
+    if (canvasId === 'carChartCtx') {
+      if (carChart) carChart.destroy();
+      carChart = new Chart(ctx, { type, data: { labels, datasets: [{ data, backgroundColor: colors }] } });
+    } else {
+      if (workChart) workChart.destroy();
+      workChart = new Chart(ctx, { type, data: { labels, datasets: [{ data, backgroundColor: colors }] } });
+    }
+  }
+
+  function exportSummaryPdf() {
+    const start = document.getElementById('statStart').value;
+    const end = document.getElementById('statEnd').value;
+    showLoading(true);
+    google.script.run.withSuccessHandler(res => {
+      showLoading(false);
+      if(res.success) {
+         const link = document.createElement('a');
+         link.href = 'data:application/pdf;base64,' + res.data;
+         link.download = res.filename;
+         link.click();
+      } else {
+         Swal.fire('Error', res.message, 'error');
+      }
+    }).generateSummaryPdf(start, end);
+  }
+
+  // --- Helpers ---
+
+  function val(id) {
+    return document.getElementById(id).value.trim();
+  }
+
+  function toggleOtherVehicle() {
+    const val = document.getElementById('vehicleType').value;
+    const isOther = val === 'อื่นๆ ให้ระบุ' || val === 'other';
+    document.getElementById('vehicleOtherDiv').style.display = isOther ? 'block' : 'none';
+    document.getElementById('vehicleOther').required = isOther;
+  }
+
+  function toggleOtherWork() {
+    const val = document.getElementById('workType').value;
+    const isOther = val === 'otherWork';
+    document.getElementById('workOtherDiv').style.display = isOther ? 'block' : 'none';
+    document.getElementById('workOther').required = isOther;
+  }
+
+  function toggleDest2() {
+    const d2 = document.getElementById('dest2Container');
+    if (d2.style.display === 'none') {
+      d2.style.display = 'block';
+    } else {
+      d2.style.display = 'none';
+    }
+  }
+
+  function viewDetail(json) {
+    const b = JSON.parse(json);
+    Swal.fire({
+      title: 'รายละเอียดการจอง',
+      html: `
+        <div class="text-start">
+          <p><strong>ผู้จอง:</strong> ${b.name} (${b.department})</p>
+          <p><strong>รถ:</strong> ${b.car}</p>
+          <p><strong>วันที่:</strong> ${b.date} ${b.startTime} - ${b.returnDate} ${b.returnTime}</p>
+          <hr>
+          <p><strong>ต้นทาง:</strong> ${b.originPlace}</p>
+          <p><strong>ปลายทาง 1:</strong> ${b.dest1Place}</p>
+          ${b.dest2Place ? `<p><strong>ปลายทาง 2:</strong> ${b.dest2Place}</p>` : ''}
+          <p><strong>วัตถุประสงค์:</strong> ${b.workTypes}</p>
+          <p><strong>รายละเอียด:</strong> ${b.extraDetails || '-'}</p>
+          <hr>
+          <p><strong>สถานะ:</strong> <span class="badge bg-secondary">${b.status}</span></p>
+          ${b.rejectionReason ? `<p class="text-danger">เหตุผลการปฏิเสธ: ${b.rejectionReason}</p>` : ''}
+        </div>
+      `,
+      confirmButtonText: 'ปิด'
+    });
+  }
+
+  function getStatusClass(status) {
+    switch (status) {
+      case 'Approved': return 'status-approved';
+      case 'Rejected': return 'status-rejected';
+      default: return 'status-pending';
+    }
+  }
+</script>
