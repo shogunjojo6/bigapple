@@ -597,9 +597,9 @@ function buildQrImages_(d){
 function buildPdfHtml_(d, qr) {
   const qrBlock = (label, img, url) => {
     if (!img && !url) return '';
-    const imgTag = img ? `<img src="${img}" style="width:100px;height:100px;border:1px solid #ddd;padding:2px;display:block;margin-top:5px;">` : '';
-    const urlText = url ? `<div style="font-size:10px;color:#555;word-break:break-all;margin-top:2px;">${escape_(url)}</div>` : '';
-    return `<td style="vertical-align:top;width:33%;padding:5px;"><strong>${escape_(label)}</strong><br>${imgTag}${urlText}</td>`;
+    const imgTag = img ? `<img src="${img}" style="width:70px;height:70px;border:1px solid #ddd;padding:2px;display:block;margin-top:2px;">` : '';
+    const urlText = url ? `<div style="font-size:9px;color:#555;word-break:break-all;margin-top:2px;line-height:1.1;">${escape_(url)}</div>` : '';
+    return `<td style="vertical-align:top;width:33%;padding:2px;"><strong>${escape_(label)}</strong><br>${imgTag}${urlText}</td>`;
   };
 
   const statusColor = d.status === 'Approved' ? '#198754' : (d.status === 'Rejected' ? '#dc3545' : '#ffc107');
@@ -607,23 +607,23 @@ function buildPdfHtml_(d, qr) {
   return `
   <html><head><style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;700&display=swap');
-    body { font-family:'Kanit', sans-serif; padding: 40px; color: #333; font-size: 14px; line-height: 1.5; }
-    .header { border-bottom: 2px solid #4e73df; padding-bottom: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-    .header h1 { margin: 0; color: #4e73df; font-size: 24px; }
-    .meta { font-size: 12px; color: #666; text-align: right; }
-    .box { border: 1px solid #ccc; border-radius: 4px; padding: 15px; margin-bottom: 20px; background-color: #fff; }
-    .box-title { font-weight: 700; color: #4e73df; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px; font-size: 16px; }
+    body { font-family:'Kanit', sans-serif; padding: 25px; color: #333; font-size: 12px; line-height: 1.3; }
+    .header { border-bottom: 2px solid #4e73df; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+    .header h1 { margin: 0; color: #4e73df; font-size: 20px; }
+    .meta { font-size: 11px; color: #666; text-align: right; }
+    .box { border: 1px solid #ccc; border-radius: 4px; padding: 10px; margin-bottom: 10px; background-color: #fff; }
+    .box-title { font-weight: 700; color: #4e73df; margin-bottom: 6px; border-bottom: 1px solid #eee; padding-bottom: 4px; font-size: 14px; }
     table { width: 100%; border-collapse: collapse; }
-    td { vertical-align: top; padding: 4px 8px; }
-    .label { font-weight: bold; color: #555; width: 140px; }
+    td { vertical-align: top; padding: 2px 6px; }
+    .label { font-weight: bold; color: #555; width: 130px; }
     .value { color: #000; }
     .status-stamp {
       border: 2px solid ${statusColor};
       color: ${statusColor};
       font-weight: bold;
-      font-size: 18px;
-      padding: 5px 15px;
-      border-radius: 8px;
+      font-size: 16px;
+      padding: 4px 12px;
+      border-radius: 6px;
       text-transform: uppercase;
       display: inline-block;
     }
