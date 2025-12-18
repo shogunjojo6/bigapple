@@ -160,6 +160,31 @@ function getCalendarMap_() {
   return map;
 }
 
+function uploadImage(data, mimeType, filename) {
+  try {
+    const folderName = "VehicleSys_Images";
+    const folders = DriveApp.getFoldersByName(folderName);
+    let folder;
+    if (folders.hasNext()) {
+      folder = folders.next();
+    } else {
+      folder = DriveApp.createFolder(folderName);
+    }
+
+    const blob = Utilities.newBlob(Utilities.base64Decode(data), mimeType, filename);
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    // Return a thumbnail or view link. Thumbnail is best for embedding.
+    // However, thumbnailLink sometimes expires or is small. webContentLink is better for some cases.
+    // Let's use getThumbnailLink() but maybe fallback to a direct ID construction if needed.
+    // Actually, thumbnailLink is usually good for UI.
+    return { success: true, url: `https://drive.google.com/uc?export=view&id=${file.getId()}` };
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+}
+
 // ---------------- Submit ----------------
 function submitBooking(formData) {
   try {

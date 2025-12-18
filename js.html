@@ -38,28 +38,28 @@
   function loadVehicles() {
     google.script.run.withSuccessHandler(vehicles => {
        const select = document.getElementById('vehicleType');
-       // Keep "select option" and "others"
-       // Clear existing dynamic options (keep first and last if structure allows, but easiest is rebuild)
        select.innerHTML = '<option value="" selected disabled>-- เลือกรถ --</option>';
 
-       // Populate from DB
-       vehicles.forEach(v => {
+       if (!vehicles || vehicles.length === 0) {
           const opt = document.createElement('option');
-          opt.value = v.name;
-          opt.textContent = v.name;
+          opt.disabled = true;
+          opt.textContent = "ไม่พบข้อมูลรถในระบบ (กรุณาเพิ่มใน Admin)";
           select.appendChild(opt);
-       });
+       } else {
+          vehicles.forEach(v => {
+             const opt = document.createElement('option');
+             opt.value = v.name;
+             opt.textContent = v.name;
+             select.appendChild(opt);
+          });
+       }
 
-       // Add "Others"
        const other = document.createElement('option');
        other.value = 'อื่นๆ ให้ระบุ';
        other.textContent = 'อื่นๆ ให้ระบุ';
        select.appendChild(other);
 
-       // Update Calendar Tab as well
        renderCalendarTab(vehicles);
-
-       // Update Admin Vehicle List if loaded
        if(isAdmin) renderVehicleManagement(vehicles);
 
     }).getVehicles();
@@ -99,6 +99,26 @@
   }
 
   // --- Core Functions ---
+
+  function uploadFileHelper(fileInputId) {
+    return new Promise((resolve, reject) => {
+       const input = document.getElementById(fileInputId);
+       if (!input || !input.files || input.files.length === 0) {
+          resolve(null); // No file selected
+          return;
+       }
+       const file = input.files[0];
+       const reader = new FileReader();
+       reader.onload = function(e) {
+          const data = e.target.result.split(',')[1]; // Base64 part
+          google.script.run.withSuccessHandler(res => {
+             if (res.success) resolve(res.url);
+             else reject(res.message);
+          }).withFailureHandler(err => reject(err)).uploadImage(data, file.type, file.name);
+       };
+       reader.readAsDataURL(file);
+    });
+  }
 
   function showLoading(show = true) {
     document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
@@ -239,13 +259,27 @@
 
     filtered.forEach(b => {
       const tr = document.createElement('tr');
+      // Approver Display
+      let approverHtml = '';
+      if(b.approver) {
+         // If approver matches current admin, showing self image?
+         // Since we don't have all admin images in 'allBookings', we only have the name.
+         // Unless we fetch admin images separately. For now just show name.
+         approverHtml = `<div class="d-flex align-items-center"><i class="fas fa-user-check text-success me-1"></i><small>${escapeHtml(b.approver)}</small></div>`;
+      }
+
       tr.innerHTML = `
         <td><div class="fw-bold">${escapeHtml(b.date)}</div><small class="text-muted">${escapeHtml(b.startTime)} - ${escapeHtml(b.endTime)}</small></td>
         <td><div class="fw-bold">${escapeHtml(b.name)}</div><small>${escapeHtml(b.department)}</small></td>
-        <td>${escapeHtml(b.car)}</td>
+        <td>
+           <div>${escapeHtml(b.car)}</div>
+        </td>
         <td>${escapeHtml(b.dest1Place)}</td>
         <td>${escapeHtml(b.workTypes)}</td>
-        <td><span class="status-badge ${getStatusClass(b.status)}">${escapeHtml(b.status)}</span></td>
+        <td>
+           <span class="status-badge ${getStatusClass(b.status)}">${escapeHtml(b.status)}</span>
+           ${approverHtml}
+        </td>
         <td>
           <button class="btn btn-sm btn-info text-white me-1" onclick='viewDetail(${JSON.stringify(JSON.stringify(b))})'><i class="fas fa-eye"></i></button>
           ${isAdmin ? getAdminButtons(b) : ''}
@@ -364,16 +398,26 @@
        title: 'Edit Profile',
        html: `
          <label>Name</label><input id="editAdminName" class="swal2-input" value="${currentUser.name}">
-         <label>Image URL</label><input id="editAdminImg" class="swal2-input" value="${currentUser.image}">
-         <label>New Password (leave blank to keep)</label><input type="password" id="editAdminPass" class="swal2-input">
+         <label>Profile Image</label><input type="file" id="editAdminImgFile" class="swal2-file" accept="image/*">
+         <input type="hidden" id="editAdminImgUrl" value="${currentUser.image || ''}">
+         <small class="text-muted">Upload new to replace</small><br>
+         <label>New Password</label><input type="password" id="editAdminPass" class="swal2-input" placeholder="Leave blank to keep">
        `,
        showCancelButton: true,
-       preConfirm: () => {
-          return {
-             name: document.getElementById('editAdminName').value,
-             image: document.getElementById('editAdminImg').value,
-             password: document.getElementById('editAdminPass').value
-          };
+       preConfirm: async () => {
+          try {
+             showLoading(true);
+             const url = await uploadFileHelper('editAdminImgFile');
+             showLoading(false);
+             return {
+                name: document.getElementById('editAdminName').value,
+                image: url || document.getElementById('editAdminImgUrl').value,
+                password: document.getElementById('editAdminPass').value
+             };
+          } catch(e) {
+             showLoading(false);
+             Swal.showValidationMessage(e);
+          }
        }
      }).then(res => {
         if(res.isConfirmed) {
@@ -420,17 +464,27 @@
        html: `
          <input id="newVName" class="swal2-input" placeholder="ชื่อรถ (เช่น [รถตู้]... )">
          <input id="newVCal" class="swal2-input" placeholder="Calendar ID">
-         <input id="newVImg" class="swal2-input" placeholder="Image URL">
+         <label class="mt-3 d-block text-start text-muted">Vehicle Image</label>
+         <input type="file" id="newVImgFile" class="swal2-file" accept="image/*">
        `,
        showCancelButton: true,
-       preConfirm: () => {
+       preConfirm: async () => {
           const name = document.getElementById('newVName').value;
-          if(!name) Swal.showValidationMessage('กรุณาใส่ชื่อรถ');
-          return {
-             name: name,
-             calendarId: document.getElementById('newVCal').value,
-             image: document.getElementById('newVImg').value
-          };
+          if(!name) { Swal.showValidationMessage('กรุณาใส่ชื่อรถ'); return; }
+
+          try {
+             showLoading(true);
+             const url = await uploadFileHelper('newVImgFile');
+             showLoading(false);
+             return {
+                name: name,
+                calendarId: document.getElementById('newVCal').value,
+                image: url || ''
+             };
+          } catch(e) {
+             showLoading(false);
+             Swal.showValidationMessage(e);
+          }
        }
      }).then(res => {
         if(res.isConfirmed) {
@@ -523,7 +577,8 @@
     }).then((result) => {
       if (result.isConfirmed) {
         showLoading(true);
-        google.script.run.withSuccessHandler(afterUpdate).updateBookingStatus(row, 'Approved', null, adminToken);
+        // Send currentUser object instead of old adminToken string
+        google.script.run.withSuccessHandler(afterUpdate).updateBookingStatus(row, 'Approved', null, currentUser);
       }
     });
   }
@@ -539,7 +594,7 @@
     }).then((result) => {
       if (result.isConfirmed) {
         showLoading(true);
-        google.script.run.withSuccessHandler(afterUpdate).updateBookingStatus(row, 'Rejected', result.value, adminToken);
+        google.script.run.withSuccessHandler(afterUpdate).updateBookingStatus(row, 'Rejected', result.value, currentUser);
       }
     });
   }
