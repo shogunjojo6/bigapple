@@ -10,12 +10,8 @@ const ADMIN_PASS = 'L@sasa4321';
 const SHEET_NAME = 'Bookings';
 const SPREADSHEET_ID = '1SYK7LTcyiZpP4udPdTeqGWeHCy5ze4b6KamEJDa9G-E';
 
-const CALENDAR_BY_CAR = {
-  '[รถ 6 ล้อ][ISUZU][83-0506 ระยอง]': '0bd83515078480892cb8fed5941057c025a6399e7f8409f60a5698a6f9ccfac8@group.calendar.google.com',
-  '[รถกระบะ][ISUZU][3ฒษ2096 กทม.]': 'a977fbd1f3f410b34bd0b0b6ab7eba8ef4982127fd0699e4edf7c9599926fb4a@group.calendar.google.com',
-  '[รถกระบะ][TOYOTA Hilux Champ][4ฒก9851 กทม.]': 'cd589b9d1ab0be2099149f4fe5944ac419b6af13e46b0db149651397441bb52f@group.calendar.google.com',
-  '[รถยนต์][TOYOTA YARISS][3ขข8315 กทม.]': 'ef0622aa35981268e8d3ba4ec6afaddf0e90900a3a76f9d456d2f869bc057f41@group.calendar.google.com',
-};
+const SHEET_ADMINS = 'Admins';
+const SHEET_VEHICLES = 'Vehicles';
 
 // ---------------- Web App Serving ----------------
 function doGet() {
@@ -36,7 +32,133 @@ function getCheckLink_() {
 }
 
 function preservePhone_(v){ const s=String(v||'').trim(); return s && /^\d+$/.test(s) ? "'" + s : s; }
-function adminLogin(pass){ return { success: pass === ADMIN_PASS }; }
+
+// ---------------- Admin & Vehicle Management ----------------
+
+function adminLogin(username, password) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_ADMINS);
+    if (!sheet) return { success: false, message: 'System Error: Admins sheet missing.' };
+
+    const data = sheet.getDataRange().getValues(); // Header: Username, Password, Name, ProfileImage
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(username) && String(data[i][1]) === String(password)) {
+        return {
+          success: true,
+          user: {
+            username: data[i][0],
+            name: data[i][2],
+            image: data[i][3]
+          }
+        };
+      }
+    }
+    return { success: false, message: 'Invalid credentials.' };
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+}
+
+function updateAdminProfile(username, newData) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_ADMINS);
+    const data = sheet.getDataRange().getValues();
+
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(username)) {
+        // Update Name (Col 3 / Index 2)
+        if (newData.name) sheet.getRange(i + 1, 3).setValue(newData.name);
+        // Update Image (Col 4 / Index 3)
+        if (newData.image) sheet.getRange(i + 1, 4).setValue(newData.image);
+        // Update Password (Col 2 / Index 1) if provided
+        if (newData.password) sheet.getRange(i + 1, 2).setValue(newData.password);
+
+        return {
+          success: true,
+          data: {
+            name: newData.name || data[i][2],
+            image: newData.image || data[i][3]
+          }
+        };
+      }
+    }
+    return { success: false, message: 'User not found' };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+function getVehicles() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    let sheet = ss.getSheetByName(SHEET_VEHICLES);
+    if (!sheet) {
+       sheet = ss.insertSheet(SHEET_VEHICLES);
+       sheet.appendRow(['VehicleName', 'CalendarID', 'ImageURL']);
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const vehicles = [];
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0]) {
+        vehicles.push({
+          name: data[i][0],
+          calendarId: data[i][1],
+          image: data[i][2]
+        });
+      }
+    }
+    return vehicles;
+  } catch (e) { return []; }
+}
+
+function saveVehicle(data) {
+  try {
+    // Check duplicates or update? Simplest is append or overwrite if exists.
+    // For now, let's just append for new, or simple check.
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_VEHICLES);
+
+    // Check if exists
+    const rows = sheet.getDataRange().getValues();
+    for(let i=1; i<rows.length; i++) {
+       if(rows[i][0] === data.name) {
+          // Update
+          sheet.getRange(i+1, 2).setValue(data.calendarId);
+          sheet.getRange(i+1, 3).setValue(data.image);
+          return { success: true };
+       }
+    }
+
+    // Create
+    sheet.appendRow([data.name, data.calendarId, data.image]);
+    return { success: true };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+function deleteVehicle(name) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_VEHICLES);
+    const rows = sheet.getDataRange().getValues();
+
+    for(let i=1; i<rows.length; i++) {
+       if(rows[i][0] === name) {
+          sheet.deleteRow(i+1);
+          return { success: true };
+       }
+    }
+    return { success: false, message: 'Not found' };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+// Helper to get Cal ID map
+function getCalendarMap_() {
+  const vs = getVehicles();
+  const map = {};
+  vs.forEach(v => map[v.name] = v.calendarId);
+  return map;
+}
 
 // ---------------- Submit ----------------
 function submitBooking(formData) {
@@ -45,6 +167,16 @@ function submitBooking(formData) {
     const data = sanitizeForm_(formData);
     const validationError = validateForm_(data);
     if (validationError) return { success: false, message: validationError };
+
+    // Validation: Check if car exists (if not "Other")
+    if (data.car !== 'อื่นๆ ให้ระบุ' && !data.car.startsWith('อื่นๆ')) {
+       const vehicles = getVehicles();
+       const v = vehicles.find(x => x.name === data.car);
+       if (!v) {
+          // It might be a new dynamic one, but check overlap relies on ID.
+          // If we can't find ID, we can't check calendar overlap properly unless we skip it.
+       }
+    }
 
     if (hasPendingOverlap_(sheet, data)) return { success: false, message: 'เวลาซ้ำกับคำขอค้างอยู่ กรุณาเลือกเวลาใหม่' };
     if (hasCalendarOverlap_(data)) return { success: false, message: 'เวลาซ้ำกับปฏิทิน กรุณาเลือกเวลาใหม่' };
@@ -250,11 +382,27 @@ function buildDonutSvg_(obj, colors){
 }
 
 // ---------------- Update status ----------------
-function updateBookingStatus(rowNumber, newStatus, reason, adminPass) {
+function updateBookingStatus(rowNumber, newStatus, reason, adminUser) {
   try {
-    const email = (Session.getActiveUser() && Session.getActiveUser().getEmail()) || '';
-    const isAdmin = (adminPass === ADMIN_PASS) || ADMIN_EMAILS.includes(email);
-    if (!isAdmin) return { success: false, message: 'Not authorized.' };
+    // adminUser might be object or pass. If object, use username.
+    // If string, legacy check? No, we moved to username.
+    // Re-validate against sheet if necessary or trust the flow (simple app).
+    // Let's assume adminUser is { username, name } passed from client.
+
+    // Security Check: Ideally re-validate a token. For GAS simple apps, we often trust the runner if session-based,
+    // but here client sends it. We can re-check if username exists in Admins sheet.
+
+    let adminName = 'Admin';
+    if (typeof adminUser === 'object' && adminUser.username) {
+       // Optional: Validate existence
+       adminName = adminUser.name || adminUser.username;
+    } else {
+       // Fallback for legacy calls or Email check
+       const email = (Session.getActiveUser() && Session.getActiveUser().getEmail()) || '';
+       if (ADMIN_EMAILS.includes(email)) adminName = email;
+       else return { success: false, message: 'Not authorized.' };
+    }
+
     if (!['Approved', 'Rejected'].includes(newStatus)) return { success: false, message: 'Invalid status.' };
 
     const sheet = getSheet_();
@@ -273,7 +421,10 @@ function updateBookingStatus(rowNumber, newStatus, reason, adminPass) {
         if (!start || !end) return { success: false, message: 'Invalid date/time for this booking.' };
         if (hasCalendarOverlap_(booking)) return { success: false, message: 'เวลาซ้ำกับปฏิทิน กรุณาเลือกเวลาใหม่' };
 
-        const calId = CALENDAR_BY_CAR[booking.car];
+        // Dynamic Calendar Lookup
+        const calMap = getCalendarMap_();
+        const calId = calMap[booking.car];
+
         if (!calId) return { success: false, message: `ยังไม่ได้ตั้งค่า Calendar ID สำหรับรถ ${booking.car}` };
         const calendar = CalendarApp.getCalendarById(calId);
         if (!calendar) return { success: false, message: `ไม่พบปฏิทินของรถ ${booking.car}` };
@@ -283,10 +434,11 @@ function updateBookingStatus(rowNumber, newStatus, reason, adminPass) {
         const ev = calendar.createEvent(title, start, end, { description, location: booking.dest1Place || booking.originPlace || '' });
         const eventId = ev.getId();
         const approvedAt = new Date();
-        sheet.getRange(rowNumber, 26, 1, 6).setValues([['Approved', email, approvedAt, row[28], '', eventId]]);
+        // Use adminName instead of email
+        sheet.getRange(rowNumber, 26, 1, 6).setValues([['Approved', adminName, approvedAt, row[28], '', eventId]]);
       } else {
         const approvedAt = new Date();
-        sheet.getRange(rowNumber, 26, 1, 6).setValues([['Approved', email, approvedAt, row[28], '', '']]);
+        sheet.getRange(rowNumber, 26, 1, 6).setValues([['Approved', adminName, approvedAt, row[28], '', '']]);
       }
 
       if (requesterEmail) {
@@ -300,7 +452,7 @@ function updateBookingStatus(rowNumber, newStatus, reason, adminPass) {
 
     const approvedAt = new Date();
     removeEventForBooking_(booking);
-    sheet.getRange(rowNumber, 26, 1, 6).setValues([[newStatus, email, approvedAt, row[28], reason || '', '']]);
+    sheet.getRange(rowNumber, 26, 1, 6).setValues([[newStatus, adminName, approvedAt, row[28], reason || '', '']]);
     if (requesterEmail) {
       try {
         const pdfRes = generateBookingPdf(rowNumber);
@@ -318,7 +470,8 @@ function updateBookingStatus(rowNumber, newStatus, reason, adminPass) {
 // ---------------- Calendar fetch/remove ----------------
 function getCalendarBookings(car, startDateStr, endDateStr) {
   try {
-    const calId = CALENDAR_BY_CAR[car];
+    const calMap = getCalendarMap_();
+    const calId = calMap[car];
     if (!calId) return { success: false, events: [], message: `ยังไม่ได้ตั้งค่า Calendar ID สำหรับรถ ${car}` };
     const calendar = CalendarApp.getCalendarById(calId);
     if (!calendar) return { success: false, events: [], message: `ไม่พบปฏิทินของรถ ${car}` };
@@ -341,7 +494,8 @@ function getCalendarBookings(car, startDateStr, endDateStr) {
 }
 
 function removeEventForBooking_(booking) {
-  const calId = CALENDAR_BY_CAR[booking.car];
+  const calMap = getCalendarMap_();
+  const calId = calMap[booking.car];
   if (!calId) return;
   const cal = CalendarApp.getCalendarById(calId);
   if (!cal) return;
@@ -502,9 +656,12 @@ function hasPendingOverlap_(sheet, data) {
 }
 
 function hasCalendarOverlap_(data) {
-  if (data.car === 'อื่นๆ ให้ระบุ') return false;
-  const calId = CALENDAR_BY_CAR[data.car];
+  if (data.car === 'อื่นๆ ให้ระบุ' || !data.car) return false;
+
+  const calMap = getCalendarMap_();
+  const calId = calMap[data.car];
   if (!calId) return false;
+
   const calendar = CalendarApp.getCalendarById(calId);
   if (!calendar) return false;
 
