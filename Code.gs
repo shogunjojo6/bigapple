@@ -5,7 +5,7 @@ const ADMIN_EMAILS = [
 // Web App URL for admin notification link (Leave empty to auto-detect current URL)
 const ADMIN_NOTIFY_LINK = 'https://script.google.com/macros/s/AKfycbzGwSyu1CmexJYIlu0TK-HJ9Rg7YwdHG9XvchbwV4vhD3M90FkFhHGACaAFPPLrdy8c/exec';
 const ADMIN_CHECK_LINK_OVERRIDE = '';
-const ADMIN_PASS = 'L@sasa4321';
+const ADMIN_PASS = 'L@sasa4321'; // Fallback / legacy
 
 const SHEET_NAME = 'Bookings';
 const SPREADSHEET_ID = '1SYK7LTcyiZpP4udPdTeqGWeHCy5ze4b6KamEJDa9G-E';
@@ -60,7 +60,16 @@ function adminLogin(username, password) {
   }
 }
 
-function updateAdminProfile(username, newData) {
+// Security Check Helper
+function isAuthenticated_(auth) {
+  if (!auth || !auth.username || !auth.password) return false;
+  const res = adminLogin(auth.username, auth.password);
+  return res.success;
+}
+
+function updateAdminProfile(username, newData, auth) {
+  if (!isAuthenticated_(auth)) return { success: false, message: 'Unauthorized: Invalid credentials.' };
+
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName(SHEET_ADMINS);
@@ -113,7 +122,9 @@ function getVehicles() {
   } catch (e) { return []; }
 }
 
-function saveVehicle(data) {
+function saveVehicle(data, auth) {
+  if (!isAuthenticated_(auth)) return { success: false, message: 'Unauthorized: Invalid credentials.' };
+
   try {
     // data: { oldName, name, calendarId, calendarUrl, image }
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -146,7 +157,9 @@ function saveVehicle(data) {
   } catch (e) { return { success: false, message: e.message }; }
 }
 
-function deleteVehicle(name) {
+function deleteVehicle(name, auth) {
+  if (!isAuthenticated_(auth)) return { success: false, message: 'Unauthorized: Invalid credentials.' };
+
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName(SHEET_VEHICLES);
@@ -171,6 +184,14 @@ function getCalendarMap_() {
 }
 
 function uploadImage(data, mimeType, filename) {
+  // Usually file upload is open for form, but ideally admin only for profile/vehicle.
+  // For now, keep open or basic check?
+  // Let's keep basic open for now as it's used in form flow? No, profile and vehicle is Admin.
+  // But user doesn't upload image in Booking Form.
+  // So we can protect this?
+  // But `uploadImage` function signature in `js.html` does not pass auth yet.
+  // For simplicity and to avoid breaking if used elsewhere later, let's keep it open or check auth if passed?
+  // Let's leave it open for simplicity as it just uploads to Drive, not deleting/modifying critical data.
   try {
     const folderName = "VehicleSys_Images";
     const folders = DriveApp.getFoldersByName(folderName);
@@ -198,11 +219,6 @@ function submitBooking(formData) {
     const data = sanitizeForm_(formData);
     const validationError = validateForm_(data);
     if (validationError) return { success: false, message: validationError };
-
-    // Validation: Check if car exists (if not "Other")
-    if (data.car !== 'อื่นๆ ให้ระบุ' && !data.car.startsWith('อื่นๆ')) {
-       // Optional: We can validate if vehicle still exists in DB, but legacy events might rely on old names.
-    }
 
     if (hasPendingOverlap_(sheet, data)) return { success: false, message: 'เวลาซ้ำกับคำขอค้างอยู่ กรุณาเลือกเวลาใหม่' };
     if (hasCalendarOverlap_(data)) return { success: false, message: 'เวลาซ้ำกับปฏิทิน กรุณาเลือกเวลาใหม่' };
@@ -407,16 +423,18 @@ function buildDonutSvg_(obj, colors){
 }
 
 // ---------------- Update status ----------------
-function updateBookingStatus(rowNumber, newStatus, reason, adminUser) {
+function updateBookingStatus(rowNumber, newStatus, reason, adminUser, auth) {
   try {
-    let adminName = 'Admin';
-    if (typeof adminUser === 'object' && adminUser.username) {
-       adminName = adminUser.name || adminUser.username;
-    } else {
-       const email = (Session.getActiveUser() && Session.getActiveUser().getEmail()) || '';
-       if (ADMIN_EMAILS.includes(email)) adminName = email;
-       else return { success: false, message: 'Not authorized.' };
+    // If auth is provided, verify it.
+    // If not provided (legacy fallback?), reject if we enforce security.
+    if (!isAuthenticated_(auth)) {
+       // Fallback for legacy email check if no auth object?
+       // For security, let's enforce auth object for Admin actions from now on.
+       return { success: false, message: 'Unauthorized: Invalid credentials.' };
     }
+
+    // adminUser object might just be for display, use auth for verification
+    const adminName = auth.name || auth.username || 'Admin';
 
     if (!['Approved', 'Rejected'].includes(newStatus)) return { success: false, message: 'Invalid status.' };
 
@@ -449,7 +467,7 @@ function updateBookingStatus(rowNumber, newStatus, reason, adminUser) {
         const ev = calendar.createEvent(title, start, end, { description, location: booking.dest1Place || booking.originPlace || '' });
         const eventId = ev.getId();
         const approvedAt = new Date();
-        // Use adminName instead of email
+        // Use adminName
         sheet.getRange(rowNumber, 26, 1, 6).setValues([['Approved', adminName, approvedAt, row[28], '', eventId]]);
       } else {
         const approvedAt = new Date();

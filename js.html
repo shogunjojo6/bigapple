@@ -3,6 +3,7 @@
   let allBookings = [];
   let isAdmin = false;
   let currentUser = null; // { username, name, image }
+  let adminAuth = null; // { username, password } for backend validation
 
   // Charts Instances
   let carChart = null;
@@ -332,8 +333,13 @@
         return new Promise((resolve) => {
           google.script.run
             .withSuccessHandler(res => {
-               if(res.success) resolve(res.user);
-               else Swal.showValidationMessage('Username หรือ Password ไม่ถูกต้อง');
+               if(res.success) {
+                  // Store credentials for future requests
+                  adminAuth = { username: u, password: p };
+                  resolve(res.user);
+               } else {
+                  Swal.showValidationMessage('Username หรือ Password ไม่ถูกต้อง');
+               }
             })
             .adminLogin(u, p);
         });
@@ -380,6 +386,7 @@
       if (result.isConfirmed) {
         isAdmin = false;
         currentUser = null;
+        adminAuth = null;
         updateUIForAdmin();
 
         // Remove Admin Sections from DOM
@@ -494,13 +501,16 @@
               if(r.success) {
                  currentUser.name = r.data.name;
                  currentUser.image = r.data.image;
+                 // Update auth password if changed
+                 if (res.value.password) adminAuth.password = res.value.password;
+
                  document.getElementById('adminNameDisplay').textContent = currentUser.name;
                  document.getElementById('adminProfileImg').src = currentUser.image || 'https://via.placeholder.com/100';
                  Swal.fire('Saved', '', 'success');
               } else {
                  Swal.fire('Error', r.message, 'error');
               }
-           }).updateAdminProfile(currentUser.username, res.value);
+           }).updateAdminProfile(currentUser.username, res.value, adminAuth);
         }
      });
   }
@@ -589,7 +599,7 @@
               } else {
                  Swal.fire('Error', r.message, 'error');
               }
-           }).saveVehicle(res.value);
+           }).saveVehicle(res.value, adminAuth);
         }
      });
   }
@@ -605,9 +615,10 @@
         if(r.isConfirmed) {
            showLoading(true);
            google.script.run.withSuccessHandler(res => {
+              if(!res.success && res.message) Swal.fire('Error', res.message, 'error');
               showLoading(false);
               loadVehicles();
-           }).deleteVehicle(name);
+           }).deleteVehicle(name, adminAuth);
         }
      });
   }
@@ -669,8 +680,10 @@
     }).then((result) => {
       if (result.isConfirmed) {
         showLoading(true);
-        // Send currentUser object instead of old adminToken string
-        google.script.run.withSuccessHandler(afterUpdate).updateBookingStatus(row, 'Approved', null, currentUser);
+        // Pass adminAuth for backend validation, currentUser for display logic (if mixed in backend)
+        // But backend now expects auth as last arg or mixed? Code.gs: updateBookingStatus(row, status, reason, adminUser, auth)
+        // We pass currentUser as adminUser arg, and adminAuth as auth arg.
+        google.script.run.withSuccessHandler(afterUpdate).updateBookingStatus(row, 'Approved', null, currentUser, adminAuth);
       }
     });
   }
@@ -686,7 +699,7 @@
     }).then((result) => {
       if (result.isConfirmed) {
         showLoading(true);
-        google.script.run.withSuccessHandler(afterUpdate).updateBookingStatus(row, 'Rejected', result.value, currentUser);
+        google.script.run.withSuccessHandler(afterUpdate).updateBookingStatus(row, 'Rejected', result.value, currentUser, adminAuth);
       }
     });
   }
