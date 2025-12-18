@@ -11,7 +11,7 @@ const SHEET_NAME = 'Bookings';
 const SPREADSHEET_ID = '1SYK7LTcyiZpP4udPdTeqGWeHCy5ze4b6KamEJDa9G-E';
 
 const SHEET_ADMINS = 'Admins';
-const SHEET_VEHICLES = 'Vehicles';
+const SHEET_VEHICLES = 'Calendar Vehicles';
 
 // ---------------- Web App Serving ----------------
 function doGet() {
@@ -94,7 +94,7 @@ function getVehicles() {
     let sheet = ss.getSheetByName(SHEET_VEHICLES);
     if (!sheet) {
        sheet = ss.insertSheet(SHEET_VEHICLES);
-       sheet.appendRow(['VehicleName', 'CalendarID', 'ImageURL']);
+       sheet.appendRow(['Namecar', 'Calendar ID', 'Url Calendar', 'Car Image']);
     }
 
     const data = sheet.getDataRange().getValues();
@@ -104,7 +104,8 @@ function getVehicles() {
         vehicles.push({
           name: data[i][0],
           calendarId: data[i][1],
-          image: data[i][2]
+          calendarUrl: data[i][2],
+          image: data[i][3]
         });
       }
     }
@@ -114,24 +115,33 @@ function getVehicles() {
 
 function saveVehicle(data) {
   try {
-    // Check duplicates or update? Simplest is append or overwrite if exists.
-    // For now, let's just append for new, or simple check.
+    // data: { oldName, name, calendarId, calendarUrl, image }
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName(SHEET_VEHICLES);
-
-    // Check if exists
     const rows = sheet.getDataRange().getValues();
-    for(let i=1; i<rows.length; i++) {
-       if(rows[i][0] === data.name) {
-          // Update
-          sheet.getRange(i+1, 2).setValue(data.calendarId);
-          sheet.getRange(i+1, 3).setValue(data.image);
-          return { success: true };
+
+    // If oldName is provided, we are in EDIT mode
+    if (data.oldName) {
+       for (let i = 1; i < rows.length; i++) {
+          if (rows[i][0] === data.oldName) {
+             sheet.getRange(i + 1, 1).setValue(data.name);
+             sheet.getRange(i + 1, 2).setValue(data.calendarId);
+             sheet.getRange(i + 1, 3).setValue(data.calendarUrl);
+             sheet.getRange(i + 1, 4).setValue(data.image);
+             return { success: true };
+          }
+       }
+       return { success: false, message: 'Vehicle not found to update.' };
+    }
+
+    // ADD mode: Check duplicate name
+    for (let i = 1; i < rows.length; i++) {
+       if (rows[i][0] === data.name) {
+          return { success: false, message: 'Vehicle name already exists.' };
        }
     }
 
-    // Create
-    sheet.appendRow([data.name, data.calendarId, data.image]);
+    sheet.appendRow([data.name, data.calendarId, data.calendarUrl, data.image]);
     return { success: true };
   } catch (e) { return { success: false, message: e.message }; }
 }
@@ -175,10 +185,6 @@ function uploadImage(data, mimeType, filename) {
     const file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
-    // Return a thumbnail or view link. Thumbnail is best for embedding.
-    // However, thumbnailLink sometimes expires or is small. webContentLink is better for some cases.
-    // Let's use getThumbnailLink() but maybe fallback to a direct ID construction if needed.
-    // Actually, thumbnailLink is usually good for UI.
     return { success: true, url: `https://drive.google.com/uc?export=view&id=${file.getId()}` };
   } catch (e) {
     return { success: false, message: e.message };
@@ -195,12 +201,7 @@ function submitBooking(formData) {
 
     // Validation: Check if car exists (if not "Other")
     if (data.car !== 'อื่นๆ ให้ระบุ' && !data.car.startsWith('อื่นๆ')) {
-       const vehicles = getVehicles();
-       const v = vehicles.find(x => x.name === data.car);
-       if (!v) {
-          // It might be a new dynamic one, but check overlap relies on ID.
-          // If we can't find ID, we can't check calendar overlap properly unless we skip it.
-       }
+       // Optional: We can validate if vehicle still exists in DB, but legacy events might rely on old names.
     }
 
     if (hasPendingOverlap_(sheet, data)) return { success: false, message: 'เวลาซ้ำกับคำขอค้างอยู่ กรุณาเลือกเวลาใหม่' };
@@ -294,7 +295,6 @@ function getStats(startStr, endStr) {
       const car = r[5] || 'ไม่ระบุ';
       byCar[car] = (byCar[car] || 0) + 1;
       const wt = r[3] || 'ไม่ระบุ';
-      // แยกประเภทงาน ถ้ามีหลายอย่าง (เผื่ออนาคต) แต่นี่นับเป็น string เดียว
       byWork[wt] = (byWork[wt] || 0) + 1;
     });
 
@@ -409,20 +409,10 @@ function buildDonutSvg_(obj, colors){
 // ---------------- Update status ----------------
 function updateBookingStatus(rowNumber, newStatus, reason, adminUser) {
   try {
-    // adminUser might be object or pass. If object, use username.
-    // If string, legacy check? No, we moved to username.
-    // Re-validate against sheet if necessary or trust the flow (simple app).
-    // Let's assume adminUser is { username, name } passed from client.
-
-    // Security Check: Ideally re-validate a token. For GAS simple apps, we often trust the runner if session-based,
-    // but here client sends it. We can re-check if username exists in Admins sheet.
-
     let adminName = 'Admin';
     if (typeof adminUser === 'object' && adminUser.username) {
-       // Optional: Validate existence
        adminName = adminUser.name || adminUser.username;
     } else {
-       // Fallback for legacy calls or Email check
        const email = (Session.getActiveUser() && Session.getActiveUser().getEmail()) || '';
        if (ADMIN_EMAILS.includes(email)) adminName = email;
        else return { success: false, message: 'Not authorized.' };

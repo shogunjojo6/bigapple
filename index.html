@@ -117,11 +117,7 @@
                     <label class="form-label">รถที่ต้องการ</label>
                     <select class="form-select" id="vehicleType" required>
                       <option value="" selected disabled>-- เลือกรถ --</option>
-                      <option value="[รถ 6 ล้อ][ISUZU][83-0506 ระยอง]">[รถ 6 ล้อ][ISUZU][83-0506 ระยอง]</option>
-                      <option value="[รถกระบะ][ISUZU][3ฒษ2096 กทม.]">[รถกระบะ][ISUZU][3ฒษ2096 กทม.]</option>
-                      <option value="[รถกระบะ][TOYOTA Hilux Champ][4ฒก9851 กทม.]">[รถกระบะ][TOYOTA Hilux Champ][4ฒก9851 กทม.]</option>
-                      <option value="[รถยนต์][TOYOTA YARISS][3ขข8315 กทม.]">[รถยนต์][TOYOTA YARISS][3ขข8315 กทม.]</option>
-                      <option value="อื่นๆ ให้ระบุ">อื่นๆ ให้ระบุ</option>
+                      <!-- Dynamic -->
                     </select>
                     <div id="vehicleOtherDiv" class="mt-2" style="display:none;">
                        <input type="text" class="form-control" id="vehicleOther" placeholder="ระบุรถอื่นๆ">
@@ -218,10 +214,7 @@
             <div class="col-md-3">
               <select class="form-select" id="carFilter">
                 <option value="all">รถทั้งหมด</option>
-                <option value="[รถ 6 ล้อ][ISUZU][83-0506 ระยอง]">[รถ 6 ล้อ][ISUZU][83-0506 ระยอง]</option>
-                <option value="[รถกระบะ][ISUZU][3ฒษ2096 กทม.]">[รถกระบะ][ISUZU][3ฒษ2096 กทม.]</option>
-                <option value="[รถกระบะ][TOYOTA Hilux Champ][4ฒก9851 กทม.]">[รถกระบะ][TOYOTA Hilux Champ][4ฒก9851 กทม.]</option>
-                <option value="[รถยนต์][TOYOTA YARISS][3ขข8315 กทม.]">[รถยนต์][TOYOTA YARISS][3ขข8315 กทม.]</option>
+                <!-- Dynamic -->
               </select>
             </div>
             <div class="col-md-3">
@@ -267,38 +260,10 @@
       <div class="tab-pane fade" id="nav-calendar" role="tabpanel">
         <div class="glass-card p-4">
            <h3 class="text-primary mb-4">ตารางการใช้รถ (Google Calendar)</h3>
-           <div class="row g-4">
-              <div class="col-md-6">
-                 <div class="card h-100 shadow-sm border-0">
-                    <div class="card-body text-center">
-                       <h5 class="card-title text-primary">[รถ 6 ล้อ] ISUZU 83-0506 ระยอง</h5>
-                       <a href="https://calendar.google.com/calendar/u/0/embed?src=0bd83515078480892cb8fed5941057c025a6399e7f8409f60a5698a6f9ccfac8@group.calendar.google.com&ctz=Asia/Bangkok" target="_blank" class="btn btn-primary mt-3">เปิดปฏิทิน</a>
-                    </div>
-                 </div>
-              </div>
-              <div class="col-md-6">
-                 <div class="card h-100 shadow-sm border-0">
-                    <div class="card-body text-center">
-                       <h5 class="card-title text-info">[รถกระบะ] ISUZU 3ฒษ2096 กทม.</h5>
-                       <a href="https://calendar.google.com/calendar/u/0/embed?src=a977fbd1f3f410b34bd0b0b6ab7eba8ef4982127fd0699e4edf7c9599926fb4a@group.calendar.google.com&ctz=Asia/Bangkok" target="_blank" class="btn btn-info text-white mt-3">เปิดปฏิทิน</a>
-                    </div>
-                 </div>
-              </div>
-              <div class="col-md-6">
-                 <div class="card h-100 shadow-sm border-0">
-                    <div class="card-body text-center">
-                       <h5 class="card-title text-success">[รถกระบะ] TOYOTA Hilux Champ</h5>
-                       <a href="https://calendar.google.com/calendar/u/0/embed?src=cd589b9d1ab0be2099149f4fe5944ac419b6af13e46b0db149651397441bb52f@group.calendar.google.com&ctz=Asia/Bangkok" target="_blank" class="btn btn-success mt-3">เปิดปฏิทิน</a>
-                    </div>
-                 </div>
-              </div>
-              <div class="col-md-6">
-                 <div class="card h-100 shadow-sm border-0">
-                    <div class="card-body text-center">
-                       <h5 class="card-title text-warning">[รถยนต์] TOYOTA YARISS</h5>
-                       <a href="https://calendar.google.com/calendar/u/0/embed?src=ef0622aa35981268e8d3ba4ec6afaddf0e90900a3a76f9d456d2f869bc057f41@group.calendar.google.com&ctz=Asia/Bangkok" target="_blank" class="btn btn-warning text-dark mt-3">เปิดปฏิทิน</a>
-                    </div>
-                 </div>
+           <div class="row g-4" id="calendarContainer">
+              <!-- Dynamic Calendar Cards -->
+              <div class="col-12 text-center text-muted">
+                 <span class="loader"></span> Loading calendars...
               </div>
            </div>
         </div>

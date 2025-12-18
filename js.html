@@ -67,20 +67,44 @@
 
   function renderCalendarTab(vehicles) {
      const container = document.getElementById('calendarContainer'); // We will add this ID to HTML
-     if(!container) return;
+     if(!container) return; // In case index.html not updated yet or id missing, but it was not present in prev version either? Wait, I need to check index.html for this ID.
+     // In previous index.html, there was no id="calendarContainer". I should check index.html content again or inject it.
+     // Actually, in the previous `index.html`, I saw `<div class="row g-4">` inside the calendar tab but it was hardcoded.
+     // I need to clear that and make it dynamic.
+     // Wait, `js.html` relies on `calendarContainer` which I haven't added to `index.html` yet?
+     // Let me double check `index.html` content from memory/read.
+     // The previous `index.html` had hardcoded cards.
+     // I will need to update `index.html` to have `id="calendarContainer"` inside the calendar tab.
+     // For now, let's assume I will update index.html in the next step or I can do it via JS if I select the right element.
+     // Let's use `document.querySelector('#nav-calendar .row')` or give it an ID.
+     // I'll update `index.html` later to add `id="calendarContainer"`.
+
      container.innerHTML = '';
+
+     if (vehicles.length === 0) {
+        container.innerHTML = '<div class="col-12 text-center text-muted">ไม่พบข้อมูลปฏิทินรถ</div>';
+        return;
+     }
 
      vehicles.forEach(v => {
         const col = document.createElement('div');
         col.className = 'col-md-6 col-lg-4';
         const imgHtml = v.image ? `<img src="${v.image}" class="card-img-top" style="height:200px;object-fit:cover;" alt="Vehicle Image">` : `<div class="bg-secondary text-white d-flex align-items-center justify-content-center" style="height:200px;"><i class="fas fa-car fa-3x"></i></div>`;
 
+        // Use v.calendarUrl if available, else fallback to constructing one if ID exists
+        let calLink = v.calendarUrl;
+        if (!calLink && v.calendarId) {
+           calLink = `https://calendar.google.com/calendar/embed?src=${v.calendarId}&ctz=Asia/Bangkok`;
+        }
+
+        const btnHtml = calLink ? `<a href="${calLink}" target="_blank" class="btn btn-outline-primary mt-2">เปิดปฏิทิน</a>` : `<button disabled class="btn btn-outline-secondary mt-2">ไม่มีลิงก์ปฏิทิน</button>`;
+
         col.innerHTML = `
           <div class="card h-100 shadow-sm border-0">
              ${imgHtml}
              <div class="card-body text-center">
                 <h5 class="card-title text-primary text-truncate" title="${v.name}">${v.name}</h5>
-                <a href="https://calendar.google.com/calendar/embed?src=${v.calendarId}&ctz=Asia/Bangkok" target="_blank" class="btn btn-outline-primary mt-2">เปิดปฏิทิน</a>
+                ${btnHtml}
              </div>
           </div>
         `;
@@ -366,13 +390,13 @@
          <div class="col-12">
            <div class="card shadow-sm border-0">
              <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-               <h5 class="mb-0"><i class="fas fa-car me-2"></i>จัดการรถและปฏิทิน</h5>
+               <h5 class="mb-0"><i class="fas fa-car me-2"></i>จัดการรถและปฏิทิน (Calendar Vehicles)</h5>
                <button class="btn btn-sm btn-light text-success" onclick="addVehicle()">+ เพิ่มรถ</button>
              </div>
              <div class="card-body p-0">
                <div class="table-responsive">
                  <table class="table table-hover mb-0" id="vehicleTable">
-                   <thead class="table-light"><tr><th>Image</th><th>Name</th><th>Calendar ID</th><th>Actions</th></tr></thead>
+                   <thead class="table-light"><tr><th>Image</th><th>Namecar</th><th>Calendar ID</th><th>Actions</th></tr></thead>
                    <tbody id="vehicleTableBody"></tbody>
                  </table>
                </div>
@@ -450,6 +474,7 @@
              <td>${v.name}</td>
              <td><small class="text-muted text-truncate d-inline-block" style="max-width:150px;">${v.calendarId}</small></td>
              <td>
+                <button class="btn btn-sm btn-warning text-white me-1" onclick='editVehicle(${JSON.stringify(JSON.stringify(v))})'><i class="fas fa-pen"></i></button>
                 <button class="btn btn-sm btn-danger" onclick="deleteVehicle('${v.name}')"><i class="fas fa-trash"></i></button>
              </td>
            `;
@@ -458,28 +483,52 @@
      }).getVehicles();
   }
 
+  // Add / Edit Vehicle Functions
+
   function addVehicle() {
+     openVehicleModal('Add Vehicle', null);
+  }
+
+  function editVehicle(json) {
+     const v = JSON.parse(json);
+     openVehicleModal('Edit Vehicle', v);
+  }
+
+  function openVehicleModal(title, vehicle) {
+     const isEdit = !!vehicle;
+     const nameVal = isEdit ? vehicle.name : '';
+     const calIdVal = isEdit ? vehicle.calendarId : '';
+     const calUrlVal = isEdit ? vehicle.calendarUrl : '';
+     const imgVal = isEdit ? vehicle.image : '';
+
      Swal.fire({
-       title: 'Add Vehicle',
+       title: title,
        html: `
-         <input id="newVName" class="swal2-input" placeholder="ชื่อรถ (เช่น [รถตู้]... )">
-         <input id="newVCal" class="swal2-input" placeholder="Calendar ID">
-         <label class="mt-3 d-block text-start text-muted">Vehicle Image</label>
-         <input type="file" id="newVImgFile" class="swal2-file" accept="image/*">
+         <input id="vName" class="swal2-input" placeholder="Namecar (e.g. [รถตู้]... )" value="${nameVal}">
+         <input id="vCalId" class="swal2-input" placeholder="Calendar ID" value="${calIdVal}">
+         <input id="vCalUrl" class="swal2-input" placeholder="Url Calendar (Link to view)" value="${calUrlVal}">
+
+         <label class="mt-3 d-block text-start text-muted">Car Image (Upload File OR Enter URL)</label>
+         <input type="file" id="vImgFile" class="swal2-file" accept="image/*">
+         <input id="vImgUrl" class="swal2-input" placeholder="Or Image URL" value="${imgVal}">
        `,
        showCancelButton: true,
        preConfirm: async () => {
-          const name = document.getElementById('newVName').value;
-          if(!name) { Swal.showValidationMessage('กรุณาใส่ชื่อรถ'); return; }
+          const name = document.getElementById('vName').value;
+          if(!name) { Swal.showValidationMessage('กรุณาใส่ชื่อรถ (Namecar)'); return; }
 
           try {
              showLoading(true);
-             const url = await uploadFileHelper('newVImgFile');
+             const fileUrl = await uploadFileHelper('vImgFile');
+             const textUrl = document.getElementById('vImgUrl').value;
              showLoading(false);
+
              return {
+                oldName: isEdit ? vehicle.name : null, // Important for renaming
                 name: name,
-                calendarId: document.getElementById('newVCal').value,
-                image: url || ''
+                calendarId: document.getElementById('vCalId').value,
+                calendarUrl: document.getElementById('vCalUrl').value,
+                image: fileUrl || textUrl || '' // File priority
              };
           } catch(e) {
              showLoading(false);
@@ -492,8 +541,8 @@
            google.script.run.withSuccessHandler(r => {
               showLoading(false);
               if(r.success) {
-                 Swal.fire('Added', '', 'success');
-                 loadVehicles(); // Reload all
+                 Swal.fire('Saved', '', 'success');
+                 loadVehicles(); // Reload dropdowns and tables
               } else {
                  Swal.fire('Error', r.message, 'error');
               }
