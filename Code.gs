@@ -237,7 +237,8 @@ function submitBooking(formData) {
       data.originPlace, data.originAddress, oContact, data.originReason, data.originMap,
       data.dest1Place, data.dest1Address, d1Contact, data.dest1Reason, data.dest1Map,
       data.dest2Place, data.dest2Address, d2Contact, data.dest2Reason, data.dest2Map,
-      data.extraDetails, 'Pending', '', '', data.email, '', '', data.returnDate, data.returnTime
+    data.extraDetails, 'Pending', '', '', data.email, '', '', data.returnDate, data.returnTime,
+    data.bookerPhone, data.driveOption, data.driverName
     ]);
 
     try { notifyAdmins_(data, now); } catch (e) { console.error('Notify admin failed:', e); }
@@ -276,7 +277,8 @@ function getBookings() {
         extraDetails: r[24] || '', status: r[25] || 'Pending',
         approver: r[26] || '', approvedAt: r[27] ? Utilities.formatDate(new Date(r[27]), tz, 'yyyy-MM-dd HH:mm') : '',
         requesterEmail: r[28] || '', rejectionReason: r[29] || '', eventId: r[30] || '',
-        returnDate: normalizeDate_(r[31], tz), returnTime: normalizeTime_(r[32])
+      returnDate: normalizeDate_(r[31], tz), returnTime: normalizeTime_(r[32]),
+      bookerPhone: r[33] || '', driveOption: r[34] || '', driverName: r[35] || ''
       };
     }).reverse();
 
@@ -613,7 +615,7 @@ function ensureHeader_(sheet) {
     'Dest1Place','Dest1Address','Dest1Contact','Dest1Reason','Dest1Map',
     'Dest2Place','Dest2Address','Dest2Contact','Dest2Reason','Dest2Map',
     'ExtraDetails','Status','Approver','ApprovedAt','RequesterEmail','RejectionReason','EventId',
-    'ReturnDate','ReturnTime'
+    'ReturnDate','ReturnTime', 'BookerPhone', 'DriveOption', 'DriverName'
   ];
   const firstRow = sheet.getRange(1, 1, 1, header.length).getValues()[0];
   const needsHeader = firstRow.some((cell, idx) => cell !== header[idx]);
@@ -650,6 +652,9 @@ function sanitizeForm_(formData) {
     email: safe(formData.email),
     returnDate: safe(formData.returnDate),
     returnTime: safe(formData.returnTime),
+    bookerPhone: safe(formData.bookerPhone),
+    driveOption: safe(formData.driveOption),
+    driverName: safe(formData.driverName)
   };
 }
 
@@ -750,9 +755,11 @@ function normalizeTime_(val) {
 }
 
 function buildEventDescription_(b){
+  const driverInfo = b.driveOption === 'self' ? 'ขับเอง' : `คนขับ: ${b.driverName || 'ไม่ระบุ'}`;
   return [
-    `Requester: ${b.name}`,
+    `Requester: ${b.name} (${b.bookerPhone})`,
     `Department: ${b.department}`,
+    `Driver: ${driverInfo}`,
     `WorkTypes: ${b.workTypes}`,
     `VehicleTypes: ${b.vehicleTypes}`,
     `Origin: ${b.originPlace} | ${b.originAddress} | ${b.originContact}`,
@@ -835,11 +842,14 @@ function buildPdfHtml_(d, qr) {
       <table>
         <tr>
           <td class="label">ชื่อผู้จอง:</td><td class="value">${escape_(d.name)}</td>
-          <td class="label">แผนก:</td><td class="value">${escape_(d.department)}</td>
+          <td class="label">เบอร์โทร:</td><td class="value">${escape_(d.bookerPhone)}</td>
         </tr>
         <tr>
+          <td class="label">แผนก:</td><td class="value">${escape_(d.department)}</td>
           <td class="label">อีเมล:</td><td class="value">${escape_(d.requesterEmail)}</td>
-          <td class="label">วันที่ทำรายการ:</td><td class="value">${escape_(d.timestamp)}</td>
+        </tr>
+        <tr>
+          <td class="label">วันที่ทำรายการ:</td><td class="value" colspan="3">${escape_(d.timestamp)}</td>
         </tr>
       </table>
     </div>
@@ -849,6 +859,9 @@ function buildPdfHtml_(d, qr) {
       <table>
         <tr>
           <td class="label">ประเภทงาน:</td><td class="value">${escape_(d.workTypes)}</td>
+        </tr>
+        <tr>
+          <td class="label">การขับขี่:</td><td class="value">${d.driveOption === 'self' ? 'ขับเอง' : 'ต้องการคนขับ'} ${d.driverName ? '(คนขับ: '+escape_(d.driverName)+')' : ''}</td>
         </tr>
         <tr>
           <td class="label">รถที่ใช้:</td><td class="value" colspan="3">${escape_(d.car)} (${escape_(d.vehicleTypes)})</td>

@@ -27,6 +27,10 @@
     document.getElementById('vehicleType').addEventListener('change', toggleOtherVehicle);
     document.getElementById('workType').addEventListener('change', toggleOtherWork);
 
+    // Drive Option Logic
+    document.querySelectorAll('input[name="driveOption"]').forEach(el => el.addEventListener('change', toggleDriverOptions));
+    document.getElementById('specifyDriverCheck').addEventListener('change', toggleDriverNameInput);
+
     // Admin Login & Logout
     document.getElementById('adminLoginBtn').addEventListener('click', showAdminLogin);
     document.getElementById('adminLogoutBtn').addEventListener('click', performLogout);
@@ -159,10 +163,16 @@
     }
 
     // Collect Data
+    const driveOpt = document.querySelector('input[name="driveOption"]:checked').value;
+    const specifyDriver = document.getElementById('specifyDriverCheck').checked;
+
     const formData = {
       name: val('name'),
       department: val('department'),
+      bookerPhone: val('bookerPhone'),
       email: val('email'),
+      driveOption: driveOpt,
+      driverName: (driveOpt === 'driver' && specifyDriver) ? val('driverName') : '',
       date: val('date'),
       startTime: val('startTime'),
       returnDate: val('returnDate'),
@@ -851,6 +861,24 @@
     document.getElementById('workOther').required = isOther;
   }
 
+  function toggleDriverOptions() {
+    const isDriver = document.getElementById('driveDriver').checked;
+    const div = document.getElementById('driverOptionDiv');
+    div.style.setProperty('display', isDriver ? 'inline-flex' : 'none', 'important');
+    if (!isDriver) {
+       document.getElementById('specifyDriverCheck').checked = false;
+       toggleDriverNameInput();
+    }
+  }
+
+  function toggleDriverNameInput() {
+    const checked = document.getElementById('specifyDriverCheck').checked;
+    const input = document.getElementById('driverName');
+    input.style.display = checked ? 'block' : 'none';
+    input.required = checked;
+    if(!checked) input.value = '';
+  }
+
   function toggleDest2() {
     const d2 = document.getElementById('dest2Container');
     if (d2.style.display === 'none') {
@@ -867,7 +895,9 @@
       html: `
         <div class="text-start">
           <p><strong>ผู้จอง:</strong> ${b.name} (${b.department})</p>
+          <p><strong>เบอร์โทร:</strong> ${b.bookerPhone || '-'}</p>
           <p><strong>รถ:</strong> ${b.car}</p>
+          <p><strong>ขับขี่:</strong> ${b.driveOption === 'self' ? 'ขับเอง' : 'ต้องการคนขับ'} ${b.driverName ? '(คนขับ: ' + b.driverName + ')' : ''}</p>
           <p><strong>วันที่:</strong> ${b.date} ${b.startTime} - ${b.returnDate} ${b.returnTime}</p>
           <hr>
           <p><strong>ต้นทาง:</strong> ${b.originPlace}</p>

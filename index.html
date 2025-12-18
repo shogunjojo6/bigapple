@@ -65,15 +65,19 @@
                 <!-- Section 1: User Info -->
                 <h5 class="text-secondary mb-3 border-bottom pb-2">1. ข้อมูลผู้จอง</h5>
                 <div class="row g-3 mb-4">
-                  <div class="col-md-4">
+                  <div class="col-md-6 col-lg-3">
                     <label class="form-label">ชื่อผู้จอง</label>
                     <input type="text" class="form-control" id="name" required>
                   </div>
-                  <div class="col-md-4">
+                  <div class="col-md-6 col-lg-3">
                     <label class="form-label">แผนก/หน่วยงาน</label>
                     <input type="text" class="form-control" id="department" required>
                   </div>
-                  <div class="col-md-4">
+                  <div class="col-md-6 col-lg-3">
+                    <label class="form-label">เบอร์โทรศัพท์</label>
+                    <input type="tel" class="form-control" id="bookerPhone" required placeholder="0xx-xxx-xxxx">
+                  </div>
+                  <div class="col-md-6 col-lg-3">
                     <label class="form-label">อีเมลบริษัท (@qtc-energy.com)</label>
                     <input type="email" class="form-control" id="email" required placeholder="example@qtc-energy.com">
                   </div>
@@ -122,6 +126,26 @@
                     </select>
                     <div id="vehicleOtherDiv" class="mt-2" style="display:none;">
                        <input type="text" class="form-control" id="vehicleOther" placeholder="ระบุรถอื่นๆ">
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <label class="form-label d-block">รูปแบบการขับขี่</label>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="radio" name="driveOption" id="driveSelf" value="self" required>
+                      <label class="form-check-label" for="driveSelf">ขับเอง (จำเป็นต้องมีใบขับขี่)</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="radio" name="driveOption" id="driveDriver" value="driver">
+                      <label class="form-check-label" for="driveDriver">ต้องการคนขับ</label>
+                    </div>
+
+                    <div id="driverOptionDiv" class="d-inline-flex align-items-center ms-3" style="display:none !important;">
+                       <div class="form-check me-2">
+                          <input class="form-check-input" type="checkbox" id="specifyDriverCheck">
+                          <label class="form-check-label" for="specifyDriverCheck">ระบุคนขับ</label>
+                       </div>
+                       <input type="text" class="form-control form-control-sm" id="driverName" placeholder="ชื่อคนขับ" style="display:none; width: 150px;">
                     </div>
                   </div>
                 </div>
