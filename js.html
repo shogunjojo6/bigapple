@@ -26,8 +26,9 @@
     document.getElementById('vehicleType').addEventListener('change', toggleOtherVehicle);
     document.getElementById('workType').addEventListener('change', toggleOtherWork);
 
-    // Admin Login
+    // Admin Login & Logout
     document.getElementById('adminLoginBtn').addEventListener('click', showAdminLogin);
+    document.getElementById('adminLogoutBtn').addEventListener('click', performLogout);
 
     // Filter Inputs
     ['searchFilter', 'statusFilter', 'carFilter', 'workTypeFilter', 'filterStartDate', 'filterEndDate'].forEach(id => {
@@ -349,15 +350,57 @@
   }
 
   function updateUIForAdmin() {
+    const adminTab = document.getElementById('adminTabLink');
+    const loginBtn = document.getElementById('adminLoginBtn');
+    const logoutBtn = document.getElementById('adminLogoutBtn');
+
     if (isAdmin) {
-      document.getElementById('adminTabLink').classList.remove('d-none');
-      document.getElementById('adminLoginBtn').classList.add('d-none');
+      adminTab.classList.remove('d-none');
+      loginBtn.classList.add('d-none');
+      logoutBtn.classList.remove('d-none');
 
       // Add Profile & Vehicle Management sections dynamically if not exist
       if(!document.getElementById('adminProfileSection')) {
          renderAdminDashboardExtensions();
       }
+    } else {
+      adminTab.classList.add('d-none');
+      loginBtn.classList.remove('d-none');
+      logoutBtn.classList.add('d-none');
     }
+  }
+
+  function performLogout() {
+    Swal.fire({
+      title: 'ออกจากระบบ?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Logout'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        isAdmin = false;
+        currentUser = null;
+        updateUIForAdmin();
+
+        // Remove Admin Sections from DOM
+        const profileSec = document.getElementById('adminProfileSection');
+        if(profileSec) profileSec.remove();
+        const vehicleSec = document.getElementById('adminVehicleSection');
+        if(vehicleSec) vehicleSec.remove();
+
+        // Redirect to Home if on Admin tab
+        const adminTabBtn = document.getElementById('nav-admin-tab');
+        if (adminTabBtn.classList.contains('active')) {
+           const homeTab = new bootstrap.Tab(document.getElementById('nav-home-tab'));
+           homeTab.show();
+        }
+
+        // Reload list to remove admin controls from table
+        renderBookingsTable();
+
+        Swal.fire('Logged out', 'ออกจากระบบเรียบร้อยแล้ว', 'success');
+      }
+    });
   }
 
   function renderAdminDashboardExtensions() {
