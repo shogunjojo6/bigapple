@@ -617,6 +617,9 @@ function ensureHeader_(sheet) {
     'ExtraDetails','Status','Approver','ApprovedAt','RequesterEmail','RejectionReason','EventId',
     'ReturnDate','ReturnTime', 'BookerPhone', 'DriveOption', 'DriverName'
   ];
+  if (sheet.getMaxColumns() < header.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), header.length - sheet.getMaxColumns());
+  }
   const firstRow = sheet.getRange(1, 1, 1, header.length).getValues()[0];
   const needsHeader = firstRow.some((cell, idx) => cell !== header[idx]);
   if (needsHeader) sheet.getRange(1, 1, 1, header.length).setValues([header]);

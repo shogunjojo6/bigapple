@@ -44,7 +44,10 @@
   function loadVehicles() {
     google.script.run.withSuccessHandler(vehicles => {
        const select = document.getElementById('vehicleType');
+       const filterSelect = document.getElementById('carFilter');
+
        select.innerHTML = '<option value="" selected disabled>-- เลือกรถ --</option>';
+       filterSelect.innerHTML = '<option value="all">รถทั้งหมด</option>';
 
        if (!vehicles || vehicles.length === 0) {
           const opt = document.createElement('option');
@@ -53,17 +56,31 @@
           select.appendChild(opt);
        } else {
           vehicles.forEach(v => {
+             // Form Dropdown
              const opt = document.createElement('option');
              opt.value = v.name;
              opt.textContent = v.name;
              select.appendChild(opt);
+
+             // Filter Dropdown
+             const optF = document.createElement('option');
+             optF.value = v.name;
+             optF.textContent = v.name;
+             filterSelect.appendChild(optF);
           });
        }
 
+       // Other option for form
        const other = document.createElement('option');
        other.value = 'อื่นๆ ให้ระบุ';
        other.textContent = 'อื่นๆ ให้ระบุ';
        select.appendChild(other);
+
+       // Other option for filter
+       const otherF = document.createElement('option');
+       otherF.value = 'อื่นๆ ให้ระบุ';
+       otherF.textContent = 'อื่นๆ ให้ระบุ';
+       filterSelect.appendChild(otherF);
 
        renderCalendarTab(vehicles);
        if(isAdmin) renderVehicleManagement(vehicles);
