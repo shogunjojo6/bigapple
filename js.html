@@ -263,11 +263,13 @@
           renderBookingsTable();
         } else {
           console.error(res.error);
+          Swal.fire('Error Loading Data', res.error || 'Unknown error', 'error');
         }
       })
       .withFailureHandler(err => {
         showLoading(false);
         console.error(err);
+        Swal.fire('Connection Error', err.message, 'error');
       })
       .getBookings();
   }

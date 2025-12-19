@@ -38,8 +38,13 @@ function preservePhone_(v){ const s=String(v||'').trim(); return s && /^\d+$/.te
 function adminLogin(username, password) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(SHEET_ADMINS);
-    if (!sheet) return { success: false, message: 'System Error: Admins sheet missing.' };
+    let sheet = ss.getSheetByName(SHEET_ADMINS);
+    if (!sheet) {
+       // Auto-create Admins sheet if missing
+       sheet = ss.insertSheet(SHEET_ADMINS);
+       sheet.appendRow(['Username', 'Password', 'Name', 'ProfileImage']);
+       sheet.appendRow(['admin', '1234', 'Admin IT', '']);
+    }
 
     const data = sheet.getDataRange().getValues(); // Header: Username, Password, Name, ProfileImage
     for (let i = 1; i < data.length; i++) {
@@ -254,6 +259,8 @@ function getBookings() {
   let resp = { ok: false, bookings: [], isAdmin: false, email: '', error: '' };
   try {
     const sheet = getSheet_();
+    if (!sheet) throw new Error("Could not access sheet. Check SPREADSHEET_ID.");
+
     const values = sheet.getDataRange().getValues() || [];
     const rows = values.slice(1);
     const tz = Session.getScriptTimeZone();
