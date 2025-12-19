@@ -5,7 +5,7 @@ const ADMIN_EMAILS = [
 // Web App URL for admin notification link (Leave empty to auto-detect current URL)
 const ADMIN_NOTIFY_LINK = 'https://script.google.com/macros/s/AKfycbzGwSyu1CmexJYIlu0TK-HJ9Rg7YwdHG9XvchbwV4vhD3M90FkFhHGACaAFPPLrdy8c/exec';
 const ADMIN_CHECK_LINK_OVERRIDE = '';
-const ADMIN_PASS = 'L@sasa4321'; // Fallback / legacy
+// const ADMIN_PASS = 'L@sasa4321'; // Legacy constant, now using Admins sheet
 
 const SHEET_NAME = 'Bookings';
 const SPREADSHEET_ID = '1SYK7LTcyiZpP4udPdTeqGWeHCy5ze4b6KamEJDa9G-E';
@@ -40,7 +40,7 @@ function adminLogin(username, password) {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     let sheet = ss.getSheetByName(SHEET_ADMINS);
     if (!sheet) {
-       // Auto-create Admins sheet if missing
+       // Auto-create Admins sheet if missing with user's columns
        sheet = ss.insertSheet(SHEET_ADMINS);
        sheet.appendRow(['Username', 'Password', 'Name', 'ProfileImage']);
        sheet.appendRow(['admin', '1234', 'Admin IT', '']);
@@ -107,24 +107,29 @@ function getVehicles() {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     let sheet = ss.getSheetByName(SHEET_VEHICLES);
     if (!sheet) {
+       // Create sheet with columns matching User's request
        sheet = ss.insertSheet(SHEET_VEHICLES);
        sheet.appendRow(['Namecar', 'Calendar ID', 'Url Calendar', 'Car Image']);
     }
 
     const data = sheet.getDataRange().getValues();
     const vehicles = [];
+    // Data starts at row 2 (index 1)
     for (let i = 1; i < data.length; i++) {
-      if (data[i][0]) {
+      if (data[i][0]) { // Check Namecar
         vehicles.push({
-          name: data[i][0],
-          calendarId: data[i][1],
-          calendarUrl: data[i][2],
-          image: data[i][3]
+          name: data[i][0],      // Namecar
+          calendarId: data[i][1],// Calendar ID
+          calendarUrl: data[i][2],// Url Calendar
+          image: data[i][3]      // Car Image
         });
       }
     }
     return vehicles;
-  } catch (e) { return []; }
+  } catch (e) {
+    console.error("getVehicles error: " + e.message);
+    return [];
+  }
 }
 
 function saveVehicle(data, auth) {
@@ -134,6 +139,8 @@ function saveVehicle(data, auth) {
     // data: { oldName, name, calendarId, calendarUrl, image }
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName(SHEET_VEHICLES);
+    if (!sheet) return { success: false, message: 'Vehicle sheet not found.' };
+
     const rows = sheet.getDataRange().getValues();
 
     // If oldName is provided, we are in EDIT mode
@@ -189,14 +196,6 @@ function getCalendarMap_() {
 }
 
 function uploadImage(data, mimeType, filename) {
-  // Usually file upload is open for form, but ideally admin only for profile/vehicle.
-  // For now, keep open or basic check?
-  // Let's keep basic open for now as it's used in form flow? No, profile and vehicle is Admin.
-  // But user doesn't upload image in Booking Form.
-  // So we can protect this?
-  // But `uploadImage` function signature in `js.html` does not pass auth yet.
-  // For simplicity and to avoid breaking if used elsewhere later, let's keep it open or check auth if passed?
-  // Let's leave it open for simplicity as it just uploads to Drive, not deleting/modifying critical data.
   try {
     const folderName = "VehicleSys_Images";
     const folders = DriveApp.getFoldersByName(folderName);
@@ -242,8 +241,8 @@ function submitBooking(formData) {
       data.originPlace, data.originAddress, oContact, data.originReason, data.originMap,
       data.dest1Place, data.dest1Address, d1Contact, data.dest1Reason, data.dest1Map,
       data.dest2Place, data.dest2Address, d2Contact, data.dest2Reason, data.dest2Map,
-    data.extraDetails, 'Pending', '', '', data.email, '', '', data.returnDate, data.returnTime,
-    data.bookerPhone, data.driveOption, data.driverName
+      data.extraDetails, 'Pending', '', '', data.email, '', '', data.returnDate, data.returnTime,
+      data.bookerPhone, data.driveOption, data.driverName
     ]);
 
     try { notifyAdmins_(data, now); } catch (e) { console.error('Notify admin failed:', e); }
@@ -271,7 +270,7 @@ function getBookings() {
       const rowNumber = idx + 2;
       return {
         rowNumber,
-        timestamp: r[0] ? Utilities.formatDate(new Date(r[0]), tz, 'yyyy-MM-dd HH:mm') : '',
+        timestamp: safeFormatDate_(r[0], tz, 'yyyy-MM-dd HH:mm'),
         name: r[1] || '', department: r[2] || '',
         workTypes: r[3] || '', vehicleTypes: r[4] || '', car: r[5] || '',
         date: normalizeDate_(r[6], tz), startTime: normalizeTime_(r[7]), endTime: normalizeTime_(r[8]),
@@ -282,10 +281,11 @@ function getBookings() {
         dest2Place: r[19] || '', dest2Address: r[20] || '', dest2Contact: r[21] || '',
         dest2Reason: r[22] || '', dest2Map: r[23] || '',
         extraDetails: r[24] || '', status: r[25] || 'Pending',
-        approver: r[26] || '', approvedAt: r[27] ? Utilities.formatDate(new Date(r[27]), tz, 'yyyy-MM-dd HH:mm') : '',
+        approver: r[26] || '', approvedAt: safeFormatDate_(r[27], tz, 'yyyy-MM-dd HH:mm'),
         requesterEmail: r[28] || '', rejectionReason: r[29] || '', eventId: r[30] || '',
-      returnDate: normalizeDate_(r[31], tz), returnTime: normalizeTime_(r[32]),
-      bookerPhone: r[33] || '', driveOption: r[34] || '', driverName: r[35] || ''
+        returnDate: normalizeDate_(r[31], tz), returnTime: normalizeTime_(r[32]),
+        // Handle optional/new columns safely
+        bookerPhone: r[33] || '', driveOption: r[34] || '', driverName: r[35] || ''
       };
     }).reverse();
 
@@ -294,6 +294,18 @@ function getBookings() {
     console.error(err); resp.error = err.message || String(err);
   }
   return resp;
+}
+
+// Safe helper for date formatting to prevent crashes
+function safeFormatDate_(val, tz, fmt) {
+  if (!val) return '';
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return '';
+    return Utilities.formatDate(d, tz, fmt);
+  } catch (e) {
+    return '';
+  }
 }
 
 // ---------------- Stats ----------------
@@ -308,6 +320,7 @@ function getStats(startStr, endStr) {
     const filtered = rows.filter(r => {
       const dStart = new Date(r[6]);
       const dEnd = r[31] ? new Date(r[31]) : dStart;
+      if (isNaN(dStart.getTime())) return false; // Skip invalid dates
       if (start && dEnd < start) return false;
       if (end && dStart > end) return false;
       return true;
@@ -434,15 +447,10 @@ function buildDonutSvg_(obj, colors){
 // ---------------- Update status ----------------
 function updateBookingStatus(rowNumber, newStatus, reason, adminUser, auth) {
   try {
-    // If auth is provided, verify it.
-    // If not provided (legacy fallback?), reject if we enforce security.
     if (!isAuthenticated_(auth)) {
-       // Fallback for legacy email check if no auth object?
-       // For security, let's enforce auth object for Admin actions from now on.
        return { success: false, message: 'Unauthorized: Invalid credentials.' };
     }
 
-    // adminUser object might just be for display, use auth for verification
     const adminName = auth.name || auth.username || 'Admin';
 
     if (!['Approved', 'Rejected'].includes(newStatus)) return { success: false, message: 'Invalid status.' };
@@ -451,7 +459,7 @@ function updateBookingStatus(rowNumber, newStatus, reason, adminUser, auth) {
     const lastRow = sheet.getLastRow();
     if (!rowNumber || rowNumber < 2 || rowNumber > lastRow) return { success: false, message: 'Row out of range.' };
 
-    const row = sheet.getRange(rowNumber, 1, 1, 33).getValues()[0];
+    const row = sheet.getRange(rowNumber, 1, 1, 33).getValues()[0]; // Read first 33 common columns
     const requesterEmail = row[28] || '';
     const booking = rowToBooking_(row);
 
@@ -476,7 +484,7 @@ function updateBookingStatus(rowNumber, newStatus, reason, adminUser, auth) {
         const ev = calendar.createEvent(title, start, end, { description, location: booking.dest1Place || booking.originPlace || '' });
         const eventId = ev.getId();
         const approvedAt = new Date();
-        // Use adminName
+
         sheet.getRange(rowNumber, 26, 1, 6).setValues([['Approved', adminName, approvedAt, row[28], '', eventId]]);
       } else {
         const approvedAt = new Date();
@@ -489,7 +497,7 @@ function updateBookingStatus(rowNumber, newStatus, reason, adminUser, auth) {
           if (pdfRes && pdfRes.success) sendUserResultMail_(requesterEmail, booking, 'Approved', '', pdfRes);
         } catch (e) { console.error('Send approve mail failed:', e); }
       }
-      return { success: true, message: 'Approved (สร้าง event เฉพาะรถที่ไม่ใช่ “อื่นๆ ให้ระบุ”).' };
+      return { success: true, message: 'Approved' };
     }
 
     const approvedAt = new Date();
@@ -523,8 +531,8 @@ function getCalendarBookings(car, startDateStr, endDateStr) {
     const endBase = endDateStr ? new Date(`${endDateStr}T23:59:59`) : new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000);
     const events = calendar.getEvents(startDate, endBase).map(ev => ({
       id: ev.getId(), title: ev.getTitle(),
-      start: Utilities.formatDate(ev.getStartTime(), tz, 'yyyy-MM-dd HH:mm'),
-      end: Utilities.formatDate(ev.getEndTime(), tz, 'yyyy-MM-dd HH:mm'),
+      start: safeFormatDate_(ev.getStartTime(), tz, 'yyyy-MM-dd HH:mm'),
+      end: safeFormatDate_(ev.getEndTime(), tz, 'yyyy-MM-dd HH:mm'),
       description: ev.getDescription() || '', location: ev.getLocation() || '',
     }));
     events.sort((a, b) => new Date(a.start) - new Date(b.start));
@@ -568,14 +576,14 @@ function generateBookingPdf(rowNumber) {
     const sheet = getSheet_();
     const lastRow = sheet.getLastRow();
     if (!rowNumber || rowNumber < 2 || rowNumber > lastRow) return { success: false, message: 'Row out of range.' };
-    const row = sheet.getRange(rowNumber, 1, 1, 33).getValues()[0];
+    const row = sheet.getRange(rowNumber, 1, 36).getValues()[0]; // Read up to 36 for extended fields
     const status = row[25] || 'Pending';
     if (status !== 'Approved' && status !== 'Rejected') return { success: false, message: 'Only approved/rejected bookings can export PDF.' };
 
     const tz = Session.getScriptTimeZone();
     const data = rowToBooking_(row);
-    data.timestamp = data.timestamp ? Utilities.formatDate(new Date(data.timestamp), tz, 'yyyy-MM-dd HH:mm') : '';
-    data.approvedAt = data.approvedAt ? Utilities.formatDate(new Date(data.approvedAt), tz, 'yyyy-MM-dd HH:mm') : '';
+    data.timestamp = safeFormatDate_(data.timestamp, tz, 'yyyy-MM-dd HH:mm');
+    data.approvedAt = safeFormatDate_(data.approvedAt, tz, 'yyyy-MM-dd HH:mm');
     const qr = buildQrImages_(data);
     const html = buildPdfHtml_(data, qr);
     const pdfBlob = HtmlService.createHtmlOutput(html).getBlob().getAs('application/pdf');
@@ -605,6 +613,8 @@ function rowToBooking_(r){
     requesterEmail: r[28] || '', rejectionReason: r[29] || '', eventId: r[30] || '',
     returnDate: normalizeDate_(r[31], Session.getScriptTimeZone()),
     returnTime: normalizeTime_(r[32]),
+    // Use optional chaining or defaults for indices that might not exist if sheet is old
+    bookerPhone: r[33] || '', driveOption: r[34] || '', driverName: r[35] || ''
   };
 }
 
@@ -624,12 +634,14 @@ function ensureHeader_(sheet) {
     'ExtraDetails','Status','Approver','ApprovedAt','RequesterEmail','RejectionReason','EventId',
     'ReturnDate','ReturnTime', 'BookerPhone', 'DriveOption', 'DriverName'
   ];
-  if (sheet.getMaxColumns() < header.length) {
-    sheet.insertColumnsAfter(sheet.getMaxColumns(), header.length - sheet.getMaxColumns());
+
+  // Non-destructive update: Only append if missing
+  const currentLastCol = sheet.getLastColumn();
+  if (currentLastCol < header.length) {
+     const missingCols = header.slice(currentLastCol);
+     // Append missing headers to row 1
+     sheet.getRange(1, currentLastCol + 1, 1, missingCols.length).setValues([missingCols]);
   }
-  const firstRow = sheet.getRange(1, 1, 1, header.length).getValues()[0];
-  const needsHeader = firstRow.some((cell, idx) => cell !== header[idx]);
-  if (needsHeader) sheet.getRange(1, 1, 1, header.length).setValues([header]);
 }
 
 function sanitizeForm_(formData) {
