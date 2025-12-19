@@ -459,7 +459,7 @@ function updateBookingStatus(rowNumber, newStatus, reason, adminUser, auth) {
     const lastRow = sheet.getLastRow();
     if (!rowNumber || rowNumber < 2 || rowNumber > lastRow) return { success: false, message: 'Row out of range.' };
 
-    const row = sheet.getRange(rowNumber, 1, 1, 33).getValues()[0]; // Read first 33 common columns
+    const row = sheet.getRange(rowNumber, 1, 33).getValues()[0]; // Read first 33 common columns
     const requesterEmail = row[28] || '';
     const booking = rowToBooking_(row);
 
