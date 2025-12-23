@@ -53,31 +53,55 @@ function adminLogin(username, password) {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     let sheet = ss.getSheetByName(SHEET_ADMINS);
     if (!sheet) {
-       // Auto-create Admins sheet if missing
+       // Auto-create Admins sheet if missing with 10-column strict structure
        sheet = ss.insertSheet(SHEET_ADMINS);
-       sheet.appendRow(['Username', 'Password', 'Name', 'ProfileImage']);
+       // 1.AdminId 2.Username 3.PasswordHash 4.FullName 5.Email 6.Role 7.AvatarFileId 8.IsActive 9.CreatedAt 10.UpdatedAt
+       sheet.appendRow([
+         'AdminId', 'Username', 'PasswordHash', 'FullName', 'Email', 'Role', 'AvatarFileId', 'IsActive', 'CreatedAt', 'UpdatedAt'
+       ]);
        // Default admin: admin / 1234 (hashed)
        // SHA-256 for '1234' is '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4'
-       sheet.appendRow(['admin', '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', 'Admin IT', '']);
+       const now = new Date();
+       sheet.appendRow([
+         '1', 'admin', '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', 'System Admin', '', 'SuperAdmin', '', true, now, now
+       ]);
     }
 
     const inputHash = hashPassword_(password);
-    const data = sheet.getDataRange().getValues(); // Header: Username, Password, Name, ProfileImage
+    const data = sheet.getDataRange().getValues();
+    // Header is row 1 (index 0). Data starts at row 2 (index 1).
+    // Column indices (0-based):
+    // 1: Username
+    // 2: PasswordHash
+    // 3: FullName
+    // 4: Email
+    // 5: Role
+    // 6: AvatarFileId
+    // 7: IsActive
 
     for (let i = 1; i < data.length; i++) {
-      const storedUser = String(data[i][0]);
-      const storedPass = String(data[i][1]); // Hashed
+      const storedUser = String(data[i][1]); // Username is col 2 (index 1)
+      const storedPass = String(data[i][2]); // PasswordHash is col 3 (index 2)
+      const isActive   = data[i][7];         // IsActive is col 8 (index 7)
 
-      // Compare Input Hash vs Stored Hash
+      // Compare Username, Hash, and IsActive
       if (storedUser === String(username) && storedPass === inputHash) {
-        return {
-          success: true,
-          user: {
-            username: storedUser,
-            name: data[i][2],
-            image: data[i][3]
-          }
-        };
+        if (isActive === true || String(isActive).toLowerCase() === 'true') {
+           return {
+             success: true,
+             user: {
+               username: storedUser,
+               name: data[i][3], // FullName
+               image: data[i][6], // AvatarFileId - assuming this stores URL or ID? Frontend expects URL usually.
+               // If it's just ID, frontend might need adjustment or we format it here?
+               // Let's assume it stores a viewable link or ID we can construct link from.
+               // updateAdminProfile uses uploadImage which returns full URL. So data[i][6] is likely URL.
+               role: data[i][5]
+             }
+           };
+        } else {
+           return { success: false, message: 'Account is inactive.' };
+        }
       }
     }
     return { success: false, message: 'Invalid credentials.' };
@@ -89,7 +113,7 @@ function adminLogin(username, password) {
 // Security Check Helper
 function isAuthenticated_(auth) {
   if (!auth || !auth.username || !auth.password) return false;
-  // Note: auth.password from client is raw (from prompt), so we re-verify via adminLogin
+  // Re-verify credential against DB (stateless check)
   const res = adminLogin(auth.username, auth.password);
   return res.success;
 }
@@ -101,24 +125,35 @@ function updateAdminProfile(username, newData, auth) {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName(SHEET_ADMINS);
     const data = sheet.getDataRange().getValues();
+    const now = new Date();
 
     for (let i = 1; i < data.length; i++) {
-      if (String(data[i][0]) === String(username)) {
-        // Update Name (Col 3 / Index 2)
-        if (newData.name) sheet.getRange(i + 1, 3).setValue(newData.name);
-        // Update Image (Col 4 / Index 3)
-        if (newData.image) sheet.getRange(i + 1, 4).setValue(newData.image);
-        // Update Password (Col 2 / Index 1) if provided -> Hash it first
+      if (String(data[i][1]) === String(username)) { // Username is index 1
+        // Update FullName (Index 3 / Col 4)
+        if (newData.name) sheet.getRange(i + 1, 4).setValue(newData.name);
+
+        // Update AvatarFileId (Index 6 / Col 7) - frontend sends 'image' key
+        if (newData.image) sheet.getRange(i + 1, 7).setValue(newData.image);
+
+        // Update Password (Index 2 / Col 3) if provided -> Hash it first
         if (newData.password) {
            const newHash = hashPassword_(newData.password);
-           sheet.getRange(i + 1, 2).setValue(newHash);
+           sheet.getRange(i + 1, 3).setValue(newHash);
         }
+
+        // Update UpdatedAt (Index 9 / Col 10)
+        sheet.getRange(i + 1, 10).setValue(now);
+
+        // Fetch updated values
+        // Note: We need to fetch from sheet again or just return new values?
+        // Let's just return what we updated combined with existing.
+        // Actually safe to read current values from data[] array for unchanged fields.
 
         return {
           success: true,
           data: {
-            name: newData.name || data[i][2],
-            image: newData.image || data[i][3]
+            name: newData.name || data[i][3],
+            image: newData.image || data[i][6]
           }
         };
       }
@@ -454,8 +489,7 @@ function updateBookingStatus(rowNumber, newStatus, reason, adminUser, auth) {
        return { success: false, message: 'Unauthorized: Invalid credentials.' };
     }
 
-    // adminUser is the object {name, username, image} sent from frontend
-    // If available, use its name. Fallback to auth.username or 'Admin'
+    // adminUser object might just be for display, use auth for verification
     const adminName = (adminUser && adminUser.name) ? adminUser.name : (auth.username || 'Admin');
 
     if (!['Approved', 'Rejected'].includes(newStatus)) return { success: false, message: 'Invalid status.' };
