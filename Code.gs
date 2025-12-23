@@ -5,7 +5,6 @@ const ADMIN_EMAILS = [
 // Web App URL for admin notification link (Leave empty to auto-detect current URL)
 const ADMIN_NOTIFY_LINK = 'https://script.google.com/macros/s/AKfycbzGwSyu1CmexJYIlu0TK-HJ9Rg7YwdHG9XvchbwV4vhD3M90FkFhHGACaAFPPLrdy8c/exec';
 const ADMIN_CHECK_LINK_OVERRIDE = '';
-// const ADMIN_PASS = 'L@sasa4321'; // Legacy constant, now using Admins sheet
 
 const SHEET_NAME = 'Bookings';
 const SPREADSHEET_ID = '1SYK7LTcyiZpP4udPdTeqGWeHCy5ze4b6KamEJDa9G-E';
@@ -35,24 +34,46 @@ function preservePhone_(v){ const s=String(v||'').trim(); return s && /^\d+$/.te
 
 // ---------------- Admin & Vehicle Management ----------------
 
+// Helper: Hash Password (SHA-256)
+function hashPassword_(raw) {
+  if (!raw) return '';
+  const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, raw);
+  let hex = '';
+  for (let i = 0; i < digest.length; i++) {
+    const byte = digest[i];
+    if (byte < 0) byte += 256;
+    const bStr = byte.toString(16);
+    hex += (bStr.length === 1 ? '0' : '') + bStr;
+  }
+  return hex;
+}
+
 function adminLogin(username, password) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     let sheet = ss.getSheetByName(SHEET_ADMINS);
     if (!sheet) {
-       // Auto-create Admins sheet if missing with user's columns
+       // Auto-create Admins sheet if missing
        sheet = ss.insertSheet(SHEET_ADMINS);
        sheet.appendRow(['Username', 'Password', 'Name', 'ProfileImage']);
-       sheet.appendRow(['admin', '1234', 'Admin IT', '']);
+       // Default admin: admin / 1234 (hashed)
+       // SHA-256 for '1234' is '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4'
+       sheet.appendRow(['admin', '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', 'Admin IT', '']);
     }
 
+    const inputHash = hashPassword_(password);
     const data = sheet.getDataRange().getValues(); // Header: Username, Password, Name, ProfileImage
+
     for (let i = 1; i < data.length; i++) {
-      if (String(data[i][0]) === String(username) && String(data[i][1]) === String(password)) {
+      const storedUser = String(data[i][0]);
+      const storedPass = String(data[i][1]); // Hashed
+
+      // Compare Input Hash vs Stored Hash
+      if (storedUser === String(username) && storedPass === inputHash) {
         return {
           success: true,
           user: {
-            username: data[i][0],
+            username: storedUser,
             name: data[i][2],
             image: data[i][3]
           }
@@ -68,6 +89,7 @@ function adminLogin(username, password) {
 // Security Check Helper
 function isAuthenticated_(auth) {
   if (!auth || !auth.username || !auth.password) return false;
+  // Note: auth.password from client is raw (from prompt), so we re-verify via adminLogin
   const res = adminLogin(auth.username, auth.password);
   return res.success;
 }
@@ -86,8 +108,11 @@ function updateAdminProfile(username, newData, auth) {
         if (newData.name) sheet.getRange(i + 1, 3).setValue(newData.name);
         // Update Image (Col 4 / Index 3)
         if (newData.image) sheet.getRange(i + 1, 4).setValue(newData.image);
-        // Update Password (Col 2 / Index 1) if provided
-        if (newData.password) sheet.getRange(i + 1, 2).setValue(newData.password);
+        // Update Password (Col 2 / Index 1) if provided -> Hash it first
+        if (newData.password) {
+           const newHash = hashPassword_(newData.password);
+           sheet.getRange(i + 1, 2).setValue(newHash);
+        }
 
         return {
           success: true,
@@ -107,29 +132,24 @@ function getVehicles() {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     let sheet = ss.getSheetByName(SHEET_VEHICLES);
     if (!sheet) {
-       // Create sheet with columns matching User's request
        sheet = ss.insertSheet(SHEET_VEHICLES);
        sheet.appendRow(['Namecar', 'Calendar ID', 'Url Calendar', 'Car Image']);
     }
 
     const data = sheet.getDataRange().getValues();
     const vehicles = [];
-    // Data starts at row 2 (index 1)
     for (let i = 1; i < data.length; i++) {
-      if (data[i][0]) { // Check Namecar
+      if (data[i][0]) {
         vehicles.push({
-          name: data[i][0],      // Namecar
-          calendarId: data[i][1],// Calendar ID
-          calendarUrl: data[i][2],// Url Calendar
-          image: data[i][3]      // Car Image
+          name: data[i][0],
+          calendarId: data[i][1],
+          calendarUrl: data[i][2],
+          image: data[i][3]
         });
       }
     }
     return vehicles;
-  } catch (e) {
-    console.error("getVehicles error: " + e.message);
-    return [];
-  }
+  } catch (e) { return []; }
 }
 
 function saveVehicle(data, auth) {
@@ -139,8 +159,6 @@ function saveVehicle(data, auth) {
     // data: { oldName, name, calendarId, calendarUrl, image }
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName(SHEET_VEHICLES);
-    if (!sheet) return { success: false, message: 'Vehicle sheet not found.' };
-
     const rows = sheet.getDataRange().getValues();
 
     // If oldName is provided, we are in EDIT mode
@@ -187,7 +205,7 @@ function deleteVehicle(name, auth) {
   } catch (e) { return { success: false, message: e.message }; }
 }
 
-// Helper to get Cal ID map
+// Helper to get Cal ID map dynamically
 function getCalendarMap_() {
   const vs = getVehicles();
   const map = {};
@@ -241,8 +259,8 @@ function submitBooking(formData) {
       data.originPlace, data.originAddress, oContact, data.originReason, data.originMap,
       data.dest1Place, data.dest1Address, d1Contact, data.dest1Reason, data.dest1Map,
       data.dest2Place, data.dest2Address, d2Contact, data.dest2Reason, data.dest2Map,
-      data.extraDetails, 'Pending', '', '', data.email, '', '', data.returnDate, data.returnTime,
-      data.bookerPhone, data.driveOption, data.driverName
+    data.extraDetails, 'Pending', '', '', data.email, '', '', data.returnDate, data.returnTime,
+    data.driveOption, data.hasLicense, data.driverName
     ]);
 
     try { notifyAdmins_(data, now); } catch (e) { console.error('Notify admin failed:', e); }
@@ -258,8 +276,6 @@ function getBookings() {
   let resp = { ok: false, bookings: [], isAdmin: false, email: '', error: '' };
   try {
     const sheet = getSheet_();
-    if (!sheet) throw new Error("Could not access sheet. Check SPREADSHEET_ID.");
-
     const values = sheet.getDataRange().getValues() || [];
     const rows = values.slice(1);
     const tz = Session.getScriptTimeZone();
@@ -270,7 +286,7 @@ function getBookings() {
       const rowNumber = idx + 2;
       return {
         rowNumber,
-        timestamp: safeFormatDate_(r[0], tz, 'yyyy-MM-dd HH:mm'),
+        timestamp: r[0] ? Utilities.formatDate(new Date(r[0]), tz, 'yyyy-MM-dd HH:mm') : '',
         name: r[1] || '', department: r[2] || '',
         workTypes: r[3] || '', vehicleTypes: r[4] || '', car: r[5] || '',
         date: normalizeDate_(r[6], tz), startTime: normalizeTime_(r[7]), endTime: normalizeTime_(r[8]),
@@ -281,11 +297,10 @@ function getBookings() {
         dest2Place: r[19] || '', dest2Address: r[20] || '', dest2Contact: r[21] || '',
         dest2Reason: r[22] || '', dest2Map: r[23] || '',
         extraDetails: r[24] || '', status: r[25] || 'Pending',
-        approver: r[26] || '', approvedAt: safeFormatDate_(r[27], tz, 'yyyy-MM-dd HH:mm'),
+        approver: r[26] || '', approvedAt: r[27] ? Utilities.formatDate(new Date(r[27]), tz, 'yyyy-MM-dd HH:mm') : '',
         requesterEmail: r[28] || '', rejectionReason: r[29] || '', eventId: r[30] || '',
-        returnDate: normalizeDate_(r[31], tz), returnTime: normalizeTime_(r[32]),
-        // Handle optional/new columns safely
-        bookerPhone: r[33] || '', driveOption: r[34] || '', driverName: r[35] || ''
+      returnDate: normalizeDate_(r[31], tz), returnTime: normalizeTime_(r[32]),
+      driveOption: r[33] || '', hasLicense: r[34] || false, driverName: r[35] || ''
       };
     }).reverse();
 
@@ -294,18 +309,6 @@ function getBookings() {
     console.error(err); resp.error = err.message || String(err);
   }
   return resp;
-}
-
-// Safe helper for date formatting to prevent crashes
-function safeFormatDate_(val, tz, fmt) {
-  if (!val) return '';
-  try {
-    const d = new Date(val);
-    if (isNaN(d.getTime())) return '';
-    return Utilities.formatDate(d, tz, fmt);
-  } catch (e) {
-    return '';
-  }
 }
 
 // ---------------- Stats ----------------
@@ -320,7 +323,6 @@ function getStats(startStr, endStr) {
     const filtered = rows.filter(r => {
       const dStart = new Date(r[6]);
       const dEnd = r[31] ? new Date(r[31]) : dStart;
-      if (isNaN(dStart.getTime())) return false; // Skip invalid dates
       if (start && dEnd < start) return false;
       if (end && dStart > end) return false;
       return true;
@@ -447,10 +449,12 @@ function buildDonutSvg_(obj, colors){
 // ---------------- Update status ----------------
 function updateBookingStatus(rowNumber, newStatus, reason, adminUser, auth) {
   try {
+    // If auth is provided, verify it.
     if (!isAuthenticated_(auth)) {
        return { success: false, message: 'Unauthorized: Invalid credentials.' };
     }
 
+    // adminUser object might just be for display, use auth for verification
     const adminName = auth.name || auth.username || 'Admin';
 
     if (!['Approved', 'Rejected'].includes(newStatus)) return { success: false, message: 'Invalid status.' };
@@ -459,7 +463,7 @@ function updateBookingStatus(rowNumber, newStatus, reason, adminUser, auth) {
     const lastRow = sheet.getLastRow();
     if (!rowNumber || rowNumber < 2 || rowNumber > lastRow) return { success: false, message: 'Row out of range.' };
 
-    const row = sheet.getRange(rowNumber, 1, 33).getValues()[0]; // Read first 33 common columns
+    const row = sheet.getRange(rowNumber, 1, 1, 33).getValues()[0];
     const requesterEmail = row[28] || '';
     const booking = rowToBooking_(row);
 
@@ -484,7 +488,7 @@ function updateBookingStatus(rowNumber, newStatus, reason, adminUser, auth) {
         const ev = calendar.createEvent(title, start, end, { description, location: booking.dest1Place || booking.originPlace || '' });
         const eventId = ev.getId();
         const approvedAt = new Date();
-
+        // Use adminName
         sheet.getRange(rowNumber, 26, 1, 6).setValues([['Approved', adminName, approvedAt, row[28], '', eventId]]);
       } else {
         const approvedAt = new Date();
@@ -497,7 +501,7 @@ function updateBookingStatus(rowNumber, newStatus, reason, adminUser, auth) {
           if (pdfRes && pdfRes.success) sendUserResultMail_(requesterEmail, booking, 'Approved', '', pdfRes);
         } catch (e) { console.error('Send approve mail failed:', e); }
       }
-      return { success: true, message: 'Approved' };
+      return { success: true, message: 'Approved (สร้าง event เฉพาะรถที่ไม่ใช่ “อื่นๆ ให้ระบุ”).' };
     }
 
     const approvedAt = new Date();
@@ -531,8 +535,8 @@ function getCalendarBookings(car, startDateStr, endDateStr) {
     const endBase = endDateStr ? new Date(`${endDateStr}T23:59:59`) : new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000);
     const events = calendar.getEvents(startDate, endBase).map(ev => ({
       id: ev.getId(), title: ev.getTitle(),
-      start: safeFormatDate_(ev.getStartTime(), tz, 'yyyy-MM-dd HH:mm'),
-      end: safeFormatDate_(ev.getEndTime(), tz, 'yyyy-MM-dd HH:mm'),
+      start: Utilities.formatDate(ev.getStartTime(), tz, 'yyyy-MM-dd HH:mm'),
+      end: Utilities.formatDate(ev.getEndTime(), tz, 'yyyy-MM-dd HH:mm'),
       description: ev.getDescription() || '', location: ev.getLocation() || '',
     }));
     events.sort((a, b) => new Date(a.start) - new Date(b.start));
@@ -576,14 +580,14 @@ function generateBookingPdf(rowNumber) {
     const sheet = getSheet_();
     const lastRow = sheet.getLastRow();
     if (!rowNumber || rowNumber < 2 || rowNumber > lastRow) return { success: false, message: 'Row out of range.' };
-    const row = sheet.getRange(rowNumber, 1, 36).getValues()[0]; // Read up to 36 for extended fields
+    const row = sheet.getRange(rowNumber, 1, 1, 33).getValues()[0];
     const status = row[25] || 'Pending';
     if (status !== 'Approved' && status !== 'Rejected') return { success: false, message: 'Only approved/rejected bookings can export PDF.' };
 
     const tz = Session.getScriptTimeZone();
     const data = rowToBooking_(row);
-    data.timestamp = safeFormatDate_(data.timestamp, tz, 'yyyy-MM-dd HH:mm');
-    data.approvedAt = safeFormatDate_(data.approvedAt, tz, 'yyyy-MM-dd HH:mm');
+    data.timestamp = data.timestamp ? Utilities.formatDate(new Date(data.timestamp), tz, 'yyyy-MM-dd HH:mm') : '';
+    data.approvedAt = data.approvedAt ? Utilities.formatDate(new Date(data.approvedAt), tz, 'yyyy-MM-dd HH:mm') : '';
     const qr = buildQrImages_(data);
     const html = buildPdfHtml_(data, qr);
     const pdfBlob = HtmlService.createHtmlOutput(html).getBlob().getAs('application/pdf');
@@ -613,8 +617,10 @@ function rowToBooking_(r){
     requesterEmail: r[28] || '', rejectionReason: r[29] || '', eventId: r[30] || '',
     returnDate: normalizeDate_(r[31], Session.getScriptTimeZone()),
     returnTime: normalizeTime_(r[32]),
-    // Use optional chaining or defaults for indices that might not exist if sheet is old
-    bookerPhone: r[33] || '', driveOption: r[34] || '', driverName: r[35] || ''
+    // Map new fields safely (indices 33, 34, 35 correspond to columns 34, 35, 36)
+    driveOption: r[33] || '',
+    hasLicense: r[34] || false,
+    driverName: r[35] || ''
   };
 }
 
@@ -632,16 +638,11 @@ function ensureHeader_(sheet) {
     'Dest1Place','Dest1Address','Dest1Contact','Dest1Reason','Dest1Map',
     'Dest2Place','Dest2Address','Dest2Contact','Dest2Reason','Dest2Map',
     'ExtraDetails','Status','Approver','ApprovedAt','RequesterEmail','RejectionReason','EventId',
-    'ReturnDate','ReturnTime', 'BookerPhone', 'DriveOption', 'DriverName'
+    'ReturnDate','ReturnTime', 'DriveOption', 'HasLicense', 'DriverName'
   ];
-
-  // Non-destructive update: Only append if missing
-  const currentLastCol = sheet.getLastColumn();
-  if (currentLastCol < header.length) {
-     const missingCols = header.slice(currentLastCol);
-     // Append missing headers to row 1
-     sheet.getRange(1, currentLastCol + 1, 1, missingCols.length).setValues([missingCols]);
-  }
+  const firstRow = sheet.getRange(1, 1, 1, header.length).getValues()[0];
+  const needsHeader = firstRow.some((cell, idx) => cell !== header[idx]);
+  if (needsHeader) sheet.getRange(1, 1, 1, header.length).setValues([header]);
 }
 
 function sanitizeForm_(formData) {
@@ -674,8 +675,8 @@ function sanitizeForm_(formData) {
     email: safe(formData.email),
     returnDate: safe(formData.returnDate),
     returnTime: safe(formData.returnTime),
-    bookerPhone: safe(formData.bookerPhone),
     driveOption: safe(formData.driveOption),
+    hasLicense: formData.hasLicense === true || formData.hasLicense === 'true',
     driverName: safe(formData.driverName)
   };
 }
@@ -716,7 +717,7 @@ function hasPendingOverlap_(sheet, data) {
 }
 
 function hasCalendarOverlap_(data) {
-  if (data.car === 'อื่นๆ ให้ระบุ' || !data.car) return false;
+  if (data.car === 'อื่นๆ ให้ระบุ') return false;
 
   const calMap = getCalendarMap_();
   const calId = calMap[data.car];
@@ -777,11 +778,9 @@ function normalizeTime_(val) {
 }
 
 function buildEventDescription_(b){
-  const driverInfo = b.driveOption === 'self' ? 'ขับเอง' : `คนขับ: ${b.driverName || 'ไม่ระบุ'}`;
   return [
-    `Requester: ${b.name} (${b.bookerPhone})`,
+    `Requester: ${b.name}`,
     `Department: ${b.department}`,
-    `Driver: ${driverInfo}`,
     `WorkTypes: ${b.workTypes}`,
     `VehicleTypes: ${b.vehicleTypes}`,
     `Origin: ${b.originPlace} | ${b.originAddress} | ${b.originContact}`,
@@ -791,7 +790,8 @@ function buildEventDescription_(b){
     b.dest2Place ? `Dest2: ${b.dest2Place} | ${b.dest2Address} | ${b.dest2Contact}` : '',
     b.dest2Reason ? `Dest2 Reason: ${b.dest2Reason}` : '',
     `Extra: ${b.extraDetails}`,
-    `Date: ${b.date} ${b.startTime} → ${b.returnDate || b.date} ${b.returnTime || b.endTime}`
+    `Date: ${b.date} ${b.startTime} → ${b.returnDate || b.date} ${b.returnTime || b.endTime}`,
+    `Driving: ${b.driveOption} ${b.driverName ? '('+b.driverName+')' : ''}`
   ].filter(Boolean).join('\n');
 }
 
@@ -864,14 +864,11 @@ function buildPdfHtml_(d, qr) {
       <table>
         <tr>
           <td class="label">ชื่อผู้จอง:</td><td class="value">${escape_(d.name)}</td>
-          <td class="label">เบอร์โทร:</td><td class="value">${escape_(d.bookerPhone)}</td>
-        </tr>
-        <tr>
           <td class="label">แผนก:</td><td class="value">${escape_(d.department)}</td>
-          <td class="label">อีเมล:</td><td class="value">${escape_(d.requesterEmail)}</td>
         </tr>
         <tr>
-          <td class="label">วันที่ทำรายการ:</td><td class="value" colspan="3">${escape_(d.timestamp)}</td>
+          <td class="label">อีเมล:</td><td class="value">${escape_(d.requesterEmail)}</td>
+          <td class="label">วันที่ทำรายการ:</td><td class="value">${escape_(d.timestamp)}</td>
         </tr>
       </table>
     </div>
@@ -883,7 +880,7 @@ function buildPdfHtml_(d, qr) {
           <td class="label">ประเภทงาน:</td><td class="value">${escape_(d.workTypes)}</td>
         </tr>
         <tr>
-          <td class="label">การขับขี่:</td><td class="value">${d.driveOption === 'self' ? 'ขับเอง' : 'ต้องการคนขับ'} ${d.driverName ? '(คนขับ: '+escape_(d.driverName)+')' : ''}</td>
+          <td class="label">การขับขี่:</td><td class="value">${d.driveOption === 'SELF' ? 'ขับเอง' : 'ต้องการคนขับ'} ${d.driverName ? '(คนขับ: '+escape_(d.driverName)+')' : ''}</td>
         </tr>
         <tr>
           <td class="label">รถที่ใช้:</td><td class="value" colspan="3">${escape_(d.car)} (${escape_(d.vehicleTypes)})</td>
@@ -953,6 +950,7 @@ function notifyAdmins_(data, now) {
     `วันที่เริ่ม: ${escape_(data.date)} ${escape_(data.startTime)}<br>`,
     `วันที่คืน: ${escape_(data.returnDate)} ${escape_(data.returnTime)}<br>`,
     `ปลายทาง: ${escape_(data.dest1Place)}<br>`,
+    `การขับขี่: ${data.driveOption} ${data.driverName ? '('+data.driverName+')' : ''}<br>`,
     btn
   ].join('');
   MailApp.sendEmail({ to: ADMIN_EMAILS.join(','), subject: subj, htmlBody: html });

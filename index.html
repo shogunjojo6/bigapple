@@ -45,7 +45,6 @@
           </li>
         </ul>
         <button class="btn btn-outline-primary ms-2 btn-sm" id="adminLoginBtn"><i class="fas fa-user-shield"></i> Login</button>
-        <button class="btn btn-outline-danger ms-2 btn-sm d-none" id="adminLogoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</button>
       </div>
     </div>
   </nav>
@@ -65,19 +64,15 @@
                 <!-- Section 1: User Info -->
                 <h5 class="text-secondary mb-3 border-bottom pb-2">1. ข้อมูลผู้จอง</h5>
                 <div class="row g-3 mb-4">
-                  <div class="col-md-6 col-lg-3">
+                  <div class="col-md-4">
                     <label class="form-label">ชื่อผู้จอง</label>
                     <input type="text" class="form-control" id="name" required>
                   </div>
-                  <div class="col-md-6 col-lg-3">
+                  <div class="col-md-4">
                     <label class="form-label">แผนก/หน่วยงาน</label>
                     <input type="text" class="form-control" id="department" required>
                   </div>
-                  <div class="col-md-6 col-lg-3">
-                    <label class="form-label">เบอร์โทรศัพท์</label>
-                    <input type="tel" class="form-control" id="bookerPhone" required placeholder="0xx-xxx-xxxx">
-                  </div>
-                  <div class="col-md-6 col-lg-3">
+                  <div class="col-md-4">
                     <label class="form-label">อีเมลบริษัท (@qtc-energy.com)</label>
                     <input type="email" class="form-control" id="email" required placeholder="example@qtc-energy.com">
                   </div>
@@ -122,32 +117,43 @@
                     <label class="form-label">รถที่ต้องการ</label>
                     <select class="form-select" id="vehicleType" required>
                       <option value="" selected disabled>-- เลือกรถ --</option>
-                      <!-- Dynamic -->
+                      <option value="[รถ 6 ล้อ][ISUZU][83-0506 ระยอง]">[รถ 6 ล้อ][ISUZU][83-0506 ระยอง]</option>
+                      <option value="[รถกระบะ][ISUZU][3ฒษ2096 กทม.]">[รถกระบะ][ISUZU][3ฒษ2096 กทม.]</option>
+                      <option value="[รถกระบะ][TOYOTA Hilux Champ][4ฒก9851 กทม.]">[รถกระบะ][TOYOTA Hilux Champ][4ฒก9851 กทม.]</option>
+                      <option value="[รถยนต์][TOYOTA YARISS][3ขข8315 กทม.]">[รถยนต์][TOYOTA YARISS][3ขข8315 กทม.]</option>
+                      <option value="อื่นๆ ให้ระบุ">อื่นๆ ให้ระบุ</option>
                     </select>
                     <div id="vehicleOtherDiv" class="mt-2" style="display:none;">
                        <input type="text" class="form-control" id="vehicleOther" placeholder="ระบุรถอื่นๆ">
                     </div>
                   </div>
 
-                  <div class="col-12">
-                    <label class="form-label d-block">รูปแบบการขับขี่</label>
+                  <!-- NEW DRIVING MODE -->
+                  <div class="col-12 mt-2">
+                    <label class="form-label d-block">รูปแบบการขับขี่ (Driving Option)</label>
                     <div class="form-check form-check-inline">
-                      <input class="form-check-input" type="radio" name="driveOption" id="driveSelf" value="self" required>
-                      <label class="form-check-label" for="driveSelf">ขับเอง (จำเป็นต้องมีใบขับขี่)</label>
+                      <input class="form-check-input" type="radio" name="driveOption" id="driveSelf" value="SELF" checked>
+                      <label class="form-check-label" for="driveSelf">ขับเอง (Self-drive)</label>
                     </div>
                     <div class="form-check form-check-inline">
-                      <input class="form-check-input" type="radio" name="driveOption" id="driveDriver" value="driver">
-                      <label class="form-check-label" for="driveDriver">ต้องการคนขับ</label>
-                    </div>
-
-                    <div id="driverOptionDiv" class="d-inline-flex align-items-center ms-3" style="display:none !important;">
-                       <div class="form-check me-2">
-                          <input class="form-check-input" type="checkbox" id="specifyDriverCheck">
-                          <label class="form-check-label" for="specifyDriverCheck">ระบุคนขับ</label>
-                       </div>
-                       <input type="text" class="form-control form-control-sm" id="driverName" placeholder="ชื่อคนขับ" style="display:none; width: 150px;">
+                      <input class="form-check-input" type="radio" name="driveOption" id="driveDriver" value="DRIVER">
+                      <label class="form-check-label" for="driveDriver">ต้องการคนขับ (Driver required)</label>
                     </div>
                   </div>
+
+                  <div class="col-12" id="divHasLicense">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="hasLicense">
+                      <label class="form-check-label" for="hasLicense">ข้าพเจ้ามีใบอนุญาตขับขี่รถยนต์ที่ยังไม่หมดอายุ (I have a valid driving license)</label>
+                    </div>
+                  </div>
+
+                  <div class="col-md-6 d-none" id="divDriverName">
+                    <label class="form-label">ชื่อคนขับรถ (Driver Name)</label>
+                    <input type="text" class="form-control" id="driverName">
+                  </div>
+                  <!-- END NEW DRIVING MODE -->
+
                 </div>
 
                 <!-- Section 3: Locations -->
@@ -239,17 +245,10 @@
             <div class="col-md-3">
               <select class="form-select" id="carFilter">
                 <option value="all">รถทั้งหมด</option>
-                <!-- Dynamic -->
-              </select>
-            </div>
-            <div class="col-md-3">
-              <select class="form-select" id="workTypeFilter">
-                <option value="all">ประเภทงานทั้งหมด</option>
-                <option value="ส่งหม้อแปลงไฟฟ้า">ส่งหม้อแปลงไฟฟ้า</option>
-                <option value="ติดตั้งอุปกรณ์หม้อแปลงไฟฟ้า">ติดตั้งอุปกรณ์หม้อแปลงไฟฟ้า</option>
-                <option value="รับ-ส่งพนักงาน">รับ-ส่งพนักงาน</option>
-                <option value="รับ-ส่งลูกค้า">รับ-ส่งลูกค้า</option>
-                <option value="อื่นๆ">อื่นๆ</option>
+                <option value="[รถ 6 ล้อ][ISUZU][83-0506 ระยอง]">[รถ 6 ล้อ][ISUZU][83-0506 ระยอง]</option>
+                <option value="[รถกระบะ][ISUZU][3ฒษ2096 กทม.]">[รถกระบะ][ISUZU][3ฒษ2096 กทม.]</option>
+                <option value="[รถกระบะ][TOYOTA Hilux Champ][4ฒก9851 กทม.]">[รถกระบะ][TOYOTA Hilux Champ][4ฒก9851 กทม.]</option>
+                <option value="[รถยนต์][TOYOTA YARISS][3ขข8315 กทม.]">[รถยนต์][TOYOTA YARISS][3ขข8315 กทม.]</option>
               </select>
             </div>
             <div class="col-md-2">
@@ -261,7 +260,7 @@
           </div>
 
           <div class="table-responsive">
-            <table class="table table-hover align-middle text-nowrap">
+            <table class="table table-hover align-middle">
               <thead>
                 <tr>
                   <th width="15%">วันที่ใช้</th>
@@ -269,7 +268,7 @@
                   <th width="20%">รถ</th>
                   <th width="20%">ปลายทาง</th>
                   <th width="15%">งาน</th>
-                  <th width="10%">สถานะ/ผู้อนุมัติ</th>
+                  <th width="10%">สถานะ</th>
                   <th width="5%">Action</th>
                 </tr>
               </thead>
@@ -285,10 +284,38 @@
       <div class="tab-pane fade" id="nav-calendar" role="tabpanel">
         <div class="glass-card p-4">
            <h3 class="text-primary mb-4">ตารางการใช้รถ (Google Calendar)</h3>
-           <div class="row g-4" id="calendarContainer">
-              <!-- Dynamic Calendar Cards -->
-              <div class="col-12 text-center text-muted">
-                 <span class="loader"></span> Loading calendars...
+           <div class="row g-4">
+              <div class="col-md-6">
+                 <div class="card h-100 shadow-sm border-0">
+                    <div class="card-body text-center">
+                       <h5 class="card-title text-primary">[รถ 6 ล้อ] ISUZU 83-0506 ระยอง</h5>
+                       <a href="https://calendar.google.com/calendar/u/0/embed?src=0bd83515078480892cb8fed5941057c025a6399e7f8409f60a5698a6f9ccfac8@group.calendar.google.com&ctz=Asia/Bangkok" target="_blank" class="btn btn-primary mt-3">เปิดปฏิทิน</a>
+                    </div>
+                 </div>
+              </div>
+              <div class="col-md-6">
+                 <div class="card h-100 shadow-sm border-0">
+                    <div class="card-body text-center">
+                       <h5 class="card-title text-info">[รถกระบะ] ISUZU 3ฒษ2096 กทม.</h5>
+                       <a href="https://calendar.google.com/calendar/u/0/embed?src=a977fbd1f3f410b34bd0b0b6ab7eba8ef4982127fd0699e4edf7c9599926fb4a@group.calendar.google.com&ctz=Asia/Bangkok" target="_blank" class="btn btn-info text-white mt-3">เปิดปฏิทิน</a>
+                    </div>
+                 </div>
+              </div>
+              <div class="col-md-6">
+                 <div class="card h-100 shadow-sm border-0">
+                    <div class="card-body text-center">
+                       <h5 class="card-title text-success">[รถกระบะ] TOYOTA Hilux Champ</h5>
+                       <a href="https://calendar.google.com/calendar/u/0/embed?src=cd589b9d1ab0be2099149f4fe5944ac419b6af13e46b0db149651397441bb52f@group.calendar.google.com&ctz=Asia/Bangkok" target="_blank" class="btn btn-success mt-3">เปิดปฏิทิน</a>
+                    </div>
+                 </div>
+              </div>
+              <div class="col-md-6">
+                 <div class="card h-100 shadow-sm border-0">
+                    <div class="card-body text-center">
+                       <h5 class="card-title text-warning">[รถยนต์] TOYOTA YARISS</h5>
+                       <a href="https://calendar.google.com/calendar/u/0/embed?src=ef0622aa35981268e8d3ba4ec6afaddf0e90900a3a76f9d456d2f869bc057f41@group.calendar.google.com&ctz=Asia/Bangkok" target="_blank" class="btn btn-warning text-dark mt-3">เปิดปฏิทิน</a>
+                    </div>
+                 </div>
               </div>
            </div>
         </div>

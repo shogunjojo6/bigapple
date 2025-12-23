@@ -2,20 +2,21 @@
   // Global State
   let allBookings = [];
   let isAdmin = false;
-  let currentUser = null; // { username, name, image }
-  let adminAuth = null; // { username, password } for backend validation
+  let adminToken = '';
 
   // Charts Instances
   let carChart = null;
   let workChart = null;
 
   document.addEventListener('DOMContentLoaded', function() {
-    loadVehicles(); // Load dynamic vehicles first
     loadBookings();
     initEventListeners();
 
     // No default dates for stats as requested
     loadStats();
+
+    // Initialize Driving Mode state
+    toggleDriveOption();
   });
 
   function initEventListeners() {
@@ -27,112 +28,17 @@
     document.getElementById('vehicleType').addEventListener('change', toggleOtherVehicle);
     document.getElementById('workType').addEventListener('change', toggleOtherWork);
 
-    // Drive Option Logic
-    document.querySelectorAll('input[name="driveOption"]').forEach(el => el.addEventListener('change', toggleDriverOptions));
-    document.getElementById('specifyDriverCheck').addEventListener('change', toggleDriverNameInput);
+    // Driving Mode Toggles
+    const driveRadios = document.querySelectorAll('input[name="driveOption"]');
+    driveRadios.forEach(el => el.addEventListener('change', toggleDriveOption));
 
-    // Admin Login & Logout
+    // Admin Login
     document.getElementById('adminLoginBtn').addEventListener('click', showAdminLogin);
-    document.getElementById('adminLogoutBtn').addEventListener('click', performLogout);
 
     // Filter Inputs
-    ['searchFilter', 'statusFilter', 'carFilter', 'workTypeFilter', 'filterStartDate', 'filterEndDate'].forEach(id => {
+    ['searchFilter', 'statusFilter', 'carFilter', 'filterStartDate', 'filterEndDate'].forEach(id => {
       document.getElementById(id).addEventListener('input', renderBookingsTable);
     });
-  }
-
-  function loadVehicles() {
-    google.script.run.withSuccessHandler(vehicles => {
-       const select = document.getElementById('vehicleType');
-       const filterSelect = document.getElementById('carFilter');
-
-       select.innerHTML = '<option value="" selected disabled>-- เลือกรถ --</option>';
-       filterSelect.innerHTML = '<option value="all">รถทั้งหมด</option>';
-
-       if (!vehicles || vehicles.length === 0) {
-          const opt = document.createElement('option');
-          opt.disabled = true;
-          opt.textContent = "ไม่พบข้อมูลรถในระบบ (กรุณาเพิ่มใน Admin)";
-          select.appendChild(opt);
-       } else {
-          vehicles.forEach(v => {
-             // Form Dropdown
-             const opt = document.createElement('option');
-             opt.value = v.name;
-             opt.textContent = v.name;
-             select.appendChild(opt);
-
-             // Filter Dropdown
-             const optF = document.createElement('option');
-             optF.value = v.name;
-             optF.textContent = v.name;
-             filterSelect.appendChild(optF);
-          });
-       }
-
-       // Other option for form
-       const other = document.createElement('option');
-       other.value = 'อื่นๆ ให้ระบุ';
-       other.textContent = 'อื่นๆ ให้ระบุ';
-       select.appendChild(other);
-
-       // Other option for filter
-       const otherF = document.createElement('option');
-       otherF.value = 'อื่นๆ ให้ระบุ';
-       otherF.textContent = 'อื่นๆ ให้ระบุ';
-       filterSelect.appendChild(otherF);
-
-       renderCalendarTab(vehicles);
-       if(isAdmin) renderVehicleManagement(vehicles);
-
-    }).getVehicles();
-  }
-
-  function renderCalendarTab(vehicles) {
-     const container = document.getElementById('calendarContainer'); // We will add this ID to HTML
-     if(!container) return; // In case index.html not updated yet or id missing, but it was not present in prev version either? Wait, I need to check index.html for this ID.
-     // In previous index.html, there was no id="calendarContainer". I should check index.html content again or inject it.
-     // Actually, in the previous `index.html`, I saw `<div class="row g-4">` inside the calendar tab but it was hardcoded.
-     // I need to clear that and make it dynamic.
-     // Wait, `js.html` relies on `calendarContainer` which I haven't added to `index.html` yet?
-     // Let me double check `index.html` content from memory/read.
-     // The previous `index.html` had hardcoded cards.
-     // I will need to update `index.html` to have `id="calendarContainer"` inside the calendar tab.
-     // For now, let's assume I will update index.html in the next step or I can do it via JS if I select the right element.
-     // Let's use `document.querySelector('#nav-calendar .row')` or give it an ID.
-     // I'll update `index.html` later to add `id="calendarContainer"`.
-
-     container.innerHTML = '';
-
-     if (vehicles.length === 0) {
-        container.innerHTML = '<div class="col-12 text-center text-muted">ไม่พบข้อมูลปฏิทินรถ</div>';
-        return;
-     }
-
-     vehicles.forEach(v => {
-        const col = document.createElement('div');
-        col.className = 'col-md-6 col-lg-4';
-        const imgHtml = v.image ? `<img src="${v.image}" class="card-img-top" style="height:200px;object-fit:cover;" alt="Vehicle Image">` : `<div class="bg-secondary text-white d-flex align-items-center justify-content-center" style="height:200px;"><i class="fas fa-car fa-3x"></i></div>`;
-
-        // Use v.calendarUrl if available, else fallback to constructing one if ID exists
-        let calLink = v.calendarUrl;
-        if (!calLink && v.calendarId) {
-           calLink = `https://calendar.google.com/calendar/embed?src=${v.calendarId}&ctz=Asia/Bangkok`;
-        }
-
-        const btnHtml = calLink ? `<a href="${calLink}" target="_blank" class="btn btn-outline-primary mt-2">เปิดปฏิทิน</a>` : `<button disabled class="btn btn-outline-secondary mt-2">ไม่มีลิงก์ปฏิทิน</button>`;
-
-        col.innerHTML = `
-          <div class="card h-100 shadow-sm border-0">
-             ${imgHtml}
-             <div class="card-body text-center">
-                <h5 class="card-title text-primary text-truncate" title="${v.name}">${v.name}</h5>
-                ${btnHtml}
-             </div>
-          </div>
-        `;
-        container.appendChild(col);
-     });
   }
 
   function escapeHtml(text) {
@@ -146,26 +52,6 @@
   }
 
   // --- Core Functions ---
-
-  function uploadFileHelper(fileInputId) {
-    return new Promise((resolve, reject) => {
-       const input = document.getElementById(fileInputId);
-       if (!input || !input.files || input.files.length === 0) {
-          resolve(null); // No file selected
-          return;
-       }
-       const file = input.files[0];
-       const reader = new FileReader();
-       reader.onload = function(e) {
-          const data = e.target.result.split(',')[1]; // Base64 part
-          google.script.run.withSuccessHandler(res => {
-             if (res.success) resolve(res.url);
-             else reject(res.message);
-          }).withFailureHandler(err => reject(err)).uploadImage(data, file.type, file.name);
-       };
-       reader.readAsDataURL(file);
-    });
-  }
 
   function showLoading(show = true) {
     document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
@@ -181,15 +67,11 @@
 
     // Collect Data
     const driveOpt = document.querySelector('input[name="driveOption"]:checked').value;
-    const specifyDriver = document.getElementById('specifyDriverCheck').checked;
 
     const formData = {
       name: val('name'),
       department: val('department'),
-      bookerPhone: val('bookerPhone'),
       email: val('email'),
-      driveOption: driveOpt,
-      driverName: (driveOpt === 'driver' && specifyDriver) ? val('driverName') : '',
       date: val('date'),
       startTime: val('startTime'),
       returnDate: val('returnDate'),
@@ -214,6 +96,11 @@
       dest2Map: val('dest2Map'),
 
       extraDetails: val('extraDetails'),
+
+      // New Fields
+      driveOption: driveOpt,
+      hasLicense: (driveOpt === 'SELF' && document.getElementById('hasLicense').checked) ? true : false,
+      driverName: (driveOpt === 'DRIVER') ? val('driverName') : ''
     };
 
     // Handle "Other" logic
@@ -232,6 +119,8 @@
           Swal.fire('สำเร็จ!', res.message, 'success');
           document.getElementById('bookingForm').reset();
           document.getElementById('bookingForm').classList.remove('was-validated');
+          // Reset driving mode state
+          toggleDriveOption();
           // Switch to list tab
           new bootstrap.Tab(document.querySelector('#nav-list-tab')).show();
           loadBookings();
@@ -254,7 +143,7 @@
         if (res.ok) {
           allBookings = res.bookings;
           // Maintain admin status if already logged in via client-side token
-          if (currentUser) {
+          if (adminToken) {
              isAdmin = true;
           } else {
              isAdmin = res.isAdmin;
@@ -263,13 +152,11 @@
           renderBookingsTable();
         } else {
           console.error(res.error);
-          Swal.fire('Error Loading Data', res.error || 'Unknown error', 'error');
         }
       })
       .withFailureHandler(err => {
         showLoading(false);
         console.error(err);
-        Swal.fire('Connection Error', err.message, 'error');
       })
       .getBookings();
   }
@@ -281,7 +168,6 @@
     const filterText = val('searchFilter').toLowerCase();
     const filterStatus = val('statusFilter');
     const filterCar = val('carFilter');
-    const filterWork = val('workTypeFilter');
 
     const filterStart = document.getElementById('filterStartDate').value;
     const filterEnd = document.getElementById('filterEndDate').value;
@@ -292,19 +178,12 @@
       // Dropdown Filters
       const matchStatus = filterStatus === 'all' || b.status === filterStatus;
       const matchCar = filterCar === 'all' || b.car === filterCar;
-      // Work Type Filter
-      let matchWork = true;
-      if (filterWork !== 'all') {
-         // Use includes to match "อื่นๆ: ..." or exact matches
-         matchWork = String(b.workTypes).includes(filterWork);
-      }
-
       // Date Range Filter
       let matchDate = true;
       if (filterStart) matchDate = matchDate && (b.date >= filterStart);
       if (filterEnd) matchDate = matchDate && (b.date <= filterEnd); // Assuming b.date is YYYY-MM-DD format
 
-      return matchText && matchStatus && matchCar && matchWork && matchDate;
+      return matchText && matchStatus && matchCar && matchDate;
     });
 
     if (filtered.length === 0) {
@@ -314,27 +193,13 @@
 
     filtered.forEach(b => {
       const tr = document.createElement('tr');
-      // Approver Display
-      let approverHtml = '';
-      if(b.approver) {
-         // If approver matches current admin, showing self image?
-         // Since we don't have all admin images in 'allBookings', we only have the name.
-         // Unless we fetch admin images separately. For now just show name.
-         approverHtml = `<div class="d-flex align-items-center"><i class="fas fa-user-check text-success me-1"></i><small>${escapeHtml(b.approver)}</small></div>`;
-      }
-
       tr.innerHTML = `
         <td><div class="fw-bold">${escapeHtml(b.date)}</div><small class="text-muted">${escapeHtml(b.startTime)} - ${escapeHtml(b.endTime)}</small></td>
         <td><div class="fw-bold">${escapeHtml(b.name)}</div><small>${escapeHtml(b.department)}</small></td>
-        <td>
-           <div>${escapeHtml(b.car)}</div>
-        </td>
+        <td>${escapeHtml(b.car)}</td>
         <td>${escapeHtml(b.dest1Place)}</td>
         <td>${escapeHtml(b.workTypes)}</td>
-        <td>
-           <span class="status-badge ${getStatusClass(b.status)}">${escapeHtml(b.status)}</span>
-           ${approverHtml}
-        </td>
+        <td><span class="status-badge ${getStatusClass(b.status)}">${escapeHtml(b.status)}</span></td>
         <td>
           <button class="btn btn-sm btn-info text-white me-1" onclick='viewDetail(${JSON.stringify(JSON.stringify(b))})'><i class="fas fa-eye"></i></button>
           ${isAdmin ? getAdminButtons(b) : ''}
@@ -349,307 +214,39 @@
   function showAdminLogin() {
     Swal.fire({
       title: 'Admin Login',
-      html: `
-        <input type="text" id="swal-input1" class="swal2-input" placeholder="Username">
-        <input type="password" id="swal-input2" class="swal2-input" placeholder="Password">
-      `,
+      input: 'password',
+      inputLabel: 'Password',
+      inputPlaceholder: 'Enter your password',
       showCancelButton: true,
       confirmButtonText: 'Login',
       showLoaderOnConfirm: true,
-      preConfirm: () => {
-        const u = document.getElementById('swal-input1').value;
-        const p = document.getElementById('swal-input2').value;
+      preConfirm: (pass) => {
         return new Promise((resolve) => {
           google.script.run
             .withSuccessHandler(res => {
-               if(res.success) {
-                  // Store credentials for future requests
-                  adminAuth = { username: u, password: p };
-                  resolve(res.user);
-               } else {
-                  Swal.showValidationMessage('Username หรือ Password ไม่ถูกต้อง');
-               }
+               if(res.success) resolve(pass);
+               else Swal.showValidationMessage('รหัสผ่านไม่ถูกต้อง');
             })
-            .adminLogin(u, p);
+            .adminLogin(pass);
         });
-      }
+      },
+      allowOutsideClick: () => !Swal.isLoading()
     }).then((result) => {
       if (result.isConfirmed) {
         isAdmin = true;
-        currentUser = result.value; // Store user object
+        adminToken = result.value;
         updateUIForAdmin();
         renderBookingsTable();
-        Swal.fire('Logged in', `ยินดีต้อนรับ ${currentUser.name}`, 'success');
+        Swal.fire('Logged in', 'เข้าสู่ระบบผู้ดูแลสำเร็จ', 'success');
       }
     });
   }
 
   function updateUIForAdmin() {
-    const adminTab = document.getElementById('adminTabLink');
-    const loginBtn = document.getElementById('adminLoginBtn');
-    const logoutBtn = document.getElementById('adminLogoutBtn');
-
     if (isAdmin) {
-      adminTab.classList.remove('d-none');
-      loginBtn.classList.add('d-none');
-      logoutBtn.classList.remove('d-none');
-
-      // Add Profile & Vehicle Management sections dynamically if not exist
-      if(!document.getElementById('adminProfileSection')) {
-         renderAdminDashboardExtensions();
-      }
-    } else {
-      adminTab.classList.add('d-none');
-      loginBtn.classList.remove('d-none');
-      logoutBtn.classList.add('d-none');
+      document.getElementById('adminTabLink').classList.remove('d-none');
+      document.getElementById('adminLoginBtn').classList.add('d-none');
     }
-  }
-
-  function performLogout() {
-    Swal.fire({
-      title: 'ออกจากระบบ?',
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'Yes, Logout'
-    }).then((result) => {
-      if (result.isConfirmed) {
-        isAdmin = false;
-        currentUser = null;
-        adminAuth = null;
-        updateUIForAdmin();
-
-        // Remove Admin Sections from DOM
-        const profileSec = document.getElementById('adminProfileSection');
-        if(profileSec) profileSec.remove();
-        const vehicleSec = document.getElementById('adminVehicleSection');
-        if(vehicleSec) vehicleSec.remove();
-
-        // Redirect to Home if on Admin tab
-        const adminTabBtn = document.getElementById('nav-admin-tab');
-        if (adminTabBtn.classList.contains('active')) {
-           const homeTab = new bootstrap.Tab(document.getElementById('nav-home-tab'));
-           homeTab.show();
-        }
-
-        // Reload list to remove admin controls from table
-        renderBookingsTable();
-
-        Swal.fire('Logged out', 'ออกจากระบบเรียบร้อยแล้ว', 'success');
-      }
-    });
-  }
-
-  function renderAdminDashboardExtensions() {
-     const dashboard = document.querySelector('#nav-admin .glass-card');
-
-     // 1. Profile Section
-     const profileHtml = `
-       <div id="adminProfileSection" class="row mb-4 fade-in">
-         <div class="col-12">
-           <div class="card shadow-sm border-0">
-             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-               <h5 class="mb-0"><i class="fas fa-user-circle me-2"></i>Admin Profile</h5>
-               <button class="btn btn-sm btn-light text-primary" onclick="editAdminProfile()">Edit Profile</button>
-             </div>
-             <div class="card-body d-flex align-items-center gap-3">
-                <img src="${currentUser.image || 'https://via.placeholder.com/100'}" id="adminProfileImg" class="rounded-circle" style="width:80px;height:80px;object-fit:cover;">
-                <div>
-                   <h4 id="adminNameDisplay">${currentUser.name}</h4>
-                   <p class="text-muted mb-0">Username: ${currentUser.username}</p>
-                </div>
-             </div>
-           </div>
-         </div>
-       </div>
-     `;
-
-     // 2. Vehicle Management Section
-     const vehicleHtml = `
-       <div id="adminVehicleSection" class="row mb-4 fade-in">
-         <div class="col-12">
-           <div class="card shadow-sm border-0">
-             <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-               <h5 class="mb-0"><i class="fas fa-car me-2"></i>จัดการรถและปฏิทิน (Calendar Vehicles)</h5>
-               <button class="btn btn-sm btn-light text-success" onclick="addVehicle()">+ เพิ่มรถ</button>
-             </div>
-             <div class="card-body p-0">
-               <div class="table-responsive">
-                 <table class="table table-hover mb-0" id="vehicleTable">
-                   <thead class="table-light"><tr><th>Image</th><th>Namecar</th><th>Calendar ID</th><th>Actions</th></tr></thead>
-                   <tbody id="vehicleTableBody"></tbody>
-                 </table>
-               </div>
-             </div>
-           </div>
-         </div>
-       </div>
-     `;
-
-     // Insert before the Stats row (the row with id="totalBookings" is inside a col-md-12 div, usually the first child)
-     // Let's prepend to dashboard
-     const statsRow = dashboard.querySelector('.row.g-4.mb-4');
-     const tempDiv = document.createElement('div');
-     tempDiv.innerHTML = profileHtml + vehicleHtml;
-
-     dashboard.insertBefore(tempDiv, statsRow);
-
-     loadVehiclesForAdmin();
-  }
-
-  function editAdminProfile() {
-     Swal.fire({
-       title: 'Edit Profile',
-       html: `
-         <label>Name</label><input id="editAdminName" class="swal2-input" value="${currentUser.name}">
-         <label>Profile Image</label><input type="file" id="editAdminImgFile" class="swal2-file" accept="image/*">
-         <input type="hidden" id="editAdminImgUrl" value="${currentUser.image || ''}">
-         <small class="text-muted">Upload new to replace</small><br>
-         <label>New Password</label><input type="password" id="editAdminPass" class="swal2-input" placeholder="Leave blank to keep">
-       `,
-       showCancelButton: true,
-       preConfirm: async () => {
-          try {
-             showLoading(true);
-             const url = await uploadFileHelper('editAdminImgFile');
-             showLoading(false);
-             return {
-                name: document.getElementById('editAdminName').value,
-                image: url || document.getElementById('editAdminImgUrl').value,
-                password: document.getElementById('editAdminPass').value
-             };
-          } catch(e) {
-             showLoading(false);
-             Swal.showValidationMessage(e);
-          }
-       }
-     }).then(res => {
-        if(res.isConfirmed) {
-           showLoading(true);
-           google.script.run.withSuccessHandler(r => {
-              showLoading(false);
-              if(r.success) {
-                 currentUser.name = r.data.name;
-                 currentUser.image = r.data.image;
-                 // Update auth password if changed
-                 if (res.value.password) adminAuth.password = res.value.password;
-
-                 document.getElementById('adminNameDisplay').textContent = currentUser.name;
-                 document.getElementById('adminProfileImg').src = currentUser.image || 'https://via.placeholder.com/100';
-                 Swal.fire('Saved', '', 'success');
-              } else {
-                 Swal.fire('Error', r.message, 'error');
-              }
-           }).updateAdminProfile(currentUser.username, res.value, adminAuth);
-        }
-     });
-  }
-
-  function loadVehiclesForAdmin() {
-     google.script.run.withSuccessHandler(list => {
-        const tbody = document.getElementById('vehicleTableBody');
-        tbody.innerHTML = '';
-        list.forEach(v => {
-           const tr = document.createElement('tr');
-           const img = v.image ? `<img src="${v.image}" style="width:50px;height:50px;object-fit:cover;border-radius:4px;">` : '-';
-           tr.innerHTML = `
-             <td>${img}</td>
-             <td>${v.name}</td>
-             <td><small class="text-muted text-truncate d-inline-block" style="max-width:150px;">${v.calendarId}</small></td>
-             <td>
-                <button class="btn btn-sm btn-warning text-white me-1" onclick='editVehicle(${JSON.stringify(JSON.stringify(v))})'><i class="fas fa-pen"></i></button>
-                <button class="btn btn-sm btn-danger" onclick="deleteVehicle('${v.name}')"><i class="fas fa-trash"></i></button>
-             </td>
-           `;
-           tbody.appendChild(tr);
-        });
-     }).getVehicles();
-  }
-
-  // Add / Edit Vehicle Functions
-
-  function addVehicle() {
-     openVehicleModal('Add Vehicle', null);
-  }
-
-  function editVehicle(json) {
-     const v = JSON.parse(json);
-     openVehicleModal('Edit Vehicle', v);
-  }
-
-  function openVehicleModal(title, vehicle) {
-     const isEdit = !!vehicle;
-     const nameVal = isEdit ? vehicle.name : '';
-     const calIdVal = isEdit ? vehicle.calendarId : '';
-     const calUrlVal = isEdit ? vehicle.calendarUrl : '';
-     const imgVal = isEdit ? vehicle.image : '';
-
-     Swal.fire({
-       title: title,
-       html: `
-         <input id="vName" class="swal2-input" placeholder="Namecar (e.g. [รถตู้]... )" value="${nameVal}">
-         <input id="vCalId" class="swal2-input" placeholder="Calendar ID" value="${calIdVal}">
-         <input id="vCalUrl" class="swal2-input" placeholder="Url Calendar (Link to view)" value="${calUrlVal}">
-
-         <label class="mt-3 d-block text-start text-muted">Car Image (Upload File OR Enter URL)</label>
-         <input type="file" id="vImgFile" class="swal2-file" accept="image/*">
-         <input id="vImgUrl" class="swal2-input" placeholder="Or Image URL" value="${imgVal}">
-       `,
-       showCancelButton: true,
-       preConfirm: async () => {
-          const name = document.getElementById('vName').value;
-          if(!name) { Swal.showValidationMessage('กรุณาใส่ชื่อรถ (Namecar)'); return; }
-
-          try {
-             showLoading(true);
-             const fileUrl = await uploadFileHelper('vImgFile');
-             const textUrl = document.getElementById('vImgUrl').value;
-             showLoading(false);
-
-             return {
-                oldName: isEdit ? vehicle.name : null, // Important for renaming
-                name: name,
-                calendarId: document.getElementById('vCalId').value,
-                calendarUrl: document.getElementById('vCalUrl').value,
-                image: fileUrl || textUrl || '' // File priority
-             };
-          } catch(e) {
-             showLoading(false);
-             Swal.showValidationMessage(e);
-          }
-       }
-     }).then(res => {
-        if(res.isConfirmed) {
-           showLoading(true);
-           google.script.run.withSuccessHandler(r => {
-              showLoading(false);
-              if(r.success) {
-                 Swal.fire('Saved', '', 'success');
-                 loadVehicles(); // Reload dropdowns and tables
-              } else {
-                 Swal.fire('Error', r.message, 'error');
-              }
-           }).saveVehicle(res.value, adminAuth);
-        }
-     });
-  }
-
-  function deleteVehicle(name) {
-     Swal.fire({
-        title: 'Delete?',
-        text: `ลบรถ: ${name}`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33'
-     }).then(r => {
-        if(r.isConfirmed) {
-           showLoading(true);
-           google.script.run.withSuccessHandler(res => {
-              if(!res.success && res.message) Swal.fire('Error', res.message, 'error');
-              showLoading(false);
-              loadVehicles();
-           }).deleteVehicle(name, adminAuth);
-        }
-     });
   }
 
   function getAdminButtons(b) {
@@ -709,10 +306,7 @@
     }).then((result) => {
       if (result.isConfirmed) {
         showLoading(true);
-        // Pass adminAuth for backend validation, currentUser for display logic (if mixed in backend)
-        // But backend now expects auth as last arg or mixed? Code.gs: updateBookingStatus(row, status, reason, adminUser, auth)
-        // We pass currentUser as adminUser arg, and adminAuth as auth arg.
-        google.script.run.withSuccessHandler(afterUpdate).updateBookingStatus(row, 'Approved', null, currentUser, adminAuth);
+        google.script.run.withSuccessHandler(afterUpdate).updateBookingStatus(row, 'Approved', null, adminToken);
       }
     });
   }
@@ -728,7 +322,7 @@
     }).then((result) => {
       if (result.isConfirmed) {
         showLoading(true);
-        google.script.run.withSuccessHandler(afterUpdate).updateBookingStatus(row, 'Rejected', result.value, currentUser, adminAuth);
+        google.script.run.withSuccessHandler(afterUpdate).updateBookingStatus(row, 'Rejected', result.value, adminToken);
       }
     });
   }
@@ -880,24 +474,6 @@
     document.getElementById('workOther').required = isOther;
   }
 
-  function toggleDriverOptions() {
-    const isDriver = document.getElementById('driveDriver').checked;
-    const div = document.getElementById('driverOptionDiv');
-    div.style.setProperty('display', isDriver ? 'inline-flex' : 'none', 'important');
-    if (!isDriver) {
-       document.getElementById('specifyDriverCheck').checked = false;
-       toggleDriverNameInput();
-    }
-  }
-
-  function toggleDriverNameInput() {
-    const checked = document.getElementById('specifyDriverCheck').checked;
-    const input = document.getElementById('driverName');
-    input.style.display = checked ? 'block' : 'none';
-    input.required = checked;
-    if(!checked) input.value = '';
-  }
-
   function toggleDest2() {
     const d2 = document.getElementById('dest2Container');
     if (d2.style.display === 'none') {
@@ -907,16 +483,47 @@
     }
   }
 
+  function toggleDriveOption() {
+    // Check if element exists before accessing checked property (safety)
+    const selfEl = document.getElementById('driveSelf');
+    if(!selfEl) return;
+
+    const isSelf = selfEl.checked;
+    const divLicense = document.getElementById('divHasLicense');
+    const divDriver = document.getElementById('divDriverName');
+    const inputDriver = document.getElementById('driverName');
+
+    if (isSelf) {
+      divLicense.classList.remove('d-none');
+      divDriver.classList.add('d-none');
+      inputDriver.required = false;
+    } else {
+      divLicense.classList.add('d-none');
+      divDriver.classList.remove('d-none');
+      inputDriver.required = true;
+    }
+  }
+
   function viewDetail(json) {
     const b = JSON.parse(json);
+
+    // Construct driving info string
+    let drivingInfo = '';
+    if (b.driveOption === 'SELF') {
+       drivingInfo = 'ขับเอง' + (b.hasLicense ? ' (มีใบขับขี่)' : ' (ไม่มีใบขับขี่)');
+    } else if (b.driveOption === 'DRIVER') {
+       drivingInfo = 'ต้องการคนขับ: ' + (b.driverName || '-');
+    } else {
+       drivingInfo = '-';
+    }
+
     Swal.fire({
       title: 'รายละเอียดการจอง',
       html: `
         <div class="text-start">
           <p><strong>ผู้จอง:</strong> ${b.name} (${b.department})</p>
-          <p><strong>เบอร์โทร:</strong> ${b.bookerPhone || '-'}</p>
           <p><strong>รถ:</strong> ${b.car}</p>
-          <p><strong>ขับขี่:</strong> ${b.driveOption === 'self' ? 'ขับเอง' : 'ต้องการคนขับ'} ${b.driverName ? '(คนขับ: ' + b.driverName + ')' : ''}</p>
+          <p><strong>รูปแบบการขับขี่:</strong> ${drivingInfo}</p>
           <p><strong>วันที่:</strong> ${b.date} ${b.startTime} - ${b.returnDate} ${b.returnTime}</p>
           <hr>
           <p><strong>ต้นทาง:</strong> ${b.originPlace}</p>
