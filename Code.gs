@@ -40,7 +40,7 @@ function hashPassword_(raw) {
   const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, raw);
   let hex = '';
   for (let i = 0; i < digest.length; i++) {
-    const byte = digest[i];
+    let byte = digest[i]; // Use 'let' because we modify it
     if (byte < 0) byte += 256;
     const bStr = byte.toString(16);
     hex += (bStr.length === 1 ? '0' : '') + bStr;
@@ -70,33 +70,39 @@ function adminLogin(username, password) {
     const inputHash = hashPassword_(password);
     const data = sheet.getDataRange().getValues();
     // Header is row 1 (index 0). Data starts at row 2 (index 1).
-    // Column indices (0-based):
-    // 1: Username
-    // 2: PasswordHash
-    // 3: FullName
-    // 4: Email
-    // 5: Role
-    // 6: AvatarFileId
-    // 7: IsActive
 
     for (let i = 1; i < data.length; i++) {
-      const storedUser = String(data[i][1]); // Username is col 2 (index 1)
-      const storedPass = String(data[i][2]); // PasswordHash is col 3 (index 2)
+      // Normalize inputs and stored data for robust comparison
+      const storedUser = String(data[i][1]).trim(); // Username is col 2 (index 1)
+      const storedPass = String(data[i][2]).trim(); // PasswordHash is col 3 (index 2)
       const isActive   = data[i][7];         // IsActive is col 8 (index 7)
 
-      // Compare Username, Hash, and IsActive
-      if (storedUser === String(username) && storedPass === inputHash) {
-        if (isActive === true || String(isActive).toLowerCase() === 'true') {
+      const inputUserNormal = String(username).trim();
+
+      // Compare Username (Case-Insensitive)
+      if (storedUser.toLowerCase() === inputUserNormal.toLowerCase()) {
+
+        // Check Password Hash (Case-Insensitive for safety against upper/lower hex)
+        if (storedPass.toLowerCase() !== inputHash.toLowerCase()) {
+           return { success: false, message: 'Password incorrect.' };
+        }
+
+        // Check IsActive
+        // Handles: boolean true, string "true" (case-insensitive), number 1
+        const isActiveBool = (isActive === true) ||
+                             (String(isActive).toLowerCase() === 'true') ||
+                             (isActive === 1);
+
+        if (isActiveBool) {
            return {
              success: true,
              user: {
+               id: data[i][0], // AdminId
                username: storedUser,
                name: data[i][3], // FullName
-               image: data[i][6], // AvatarFileId - assuming this stores URL or ID? Frontend expects URL usually.
-               // If it's just ID, frontend might need adjustment or we format it here?
-               // Let's assume it stores a viewable link or ID we can construct link from.
-               // updateAdminProfile uses uploadImage which returns full URL. So data[i][6] is likely URL.
-               role: data[i][5]
+               email: data[i][4], // Email
+               role: data[i][5], // Role
+               image: data[i][6] // AvatarFileId
              }
            };
         } else {
@@ -104,16 +110,16 @@ function adminLogin(username, password) {
         }
       }
     }
-    return { success: false, message: 'Invalid credentials.' };
+    return { success: false, message: 'Username not found.' };
   } catch (e) {
-    return { success: false, message: e.message };
+    return { success: false, message: 'Login Error: ' + e.message };
   }
 }
 
 // Security Check Helper
 function isAuthenticated_(auth) {
   if (!auth || !auth.username || !auth.password) return false;
-  // Re-verify credential against DB (stateless check)
+  // Note: auth.password from client is raw (from prompt), so we re-verify via adminLogin
   const res = adminLogin(auth.username, auth.password);
   return res.success;
 }
@@ -128,7 +134,7 @@ function updateAdminProfile(username, newData, auth) {
     const now = new Date();
 
     for (let i = 1; i < data.length; i++) {
-      if (String(data[i][1]) === String(username)) { // Username is index 1
+      if (String(data[i][1]).trim().toLowerCase() === String(username).trim().toLowerCase()) { // Username is index 1
         // Update FullName (Index 3 / Col 4)
         if (newData.name) sheet.getRange(i + 1, 4).setValue(newData.name);
 
@@ -145,10 +151,6 @@ function updateAdminProfile(username, newData, auth) {
         sheet.getRange(i + 1, 10).setValue(now);
 
         // Fetch updated values
-        // Note: We need to fetch from sheet again or just return new values?
-        // Let's just return what we updated combined with existing.
-        // Actually safe to read current values from data[] array for unchanged fields.
-
         return {
           success: true,
           data: {
@@ -753,11 +755,8 @@ function hasPendingOverlap_(sheet, data) {
 
 function hasCalendarOverlap_(data) {
   if (data.car === 'อื่นๆ ให้ระบุ') return false;
-
-  const calMap = getCalendarMap_();
-  const calId = calMap[data.car];
+  const calId = CALENDAR_BY_CAR[data.car];
   if (!calId) return false;
-
   const calendar = CalendarApp.getCalendarById(calId);
   if (!calendar) return false;
 
