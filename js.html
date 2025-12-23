@@ -2,7 +2,8 @@
   // Global State
   let allBookings = [];
   let isAdmin = false;
-  let adminToken = '';
+  let currentUser = null;
+  let adminAuth = null;
 
   // Charts Instances
   let carChart = null;
@@ -143,7 +144,7 @@
         if (res.ok) {
           allBookings = res.bookings;
           // Maintain admin status if already logged in via client-side token
-          if (adminToken) {
+          if (adminAuth) {
              isAdmin = true;
           } else {
              isAdmin = res.isAdmin;
@@ -214,30 +215,50 @@
   function showAdminLogin() {
     Swal.fire({
       title: 'Admin Login',
-      input: 'password',
-      inputLabel: 'Password',
-      inputPlaceholder: 'Enter your password',
+      html: `
+        <input type="text" id="login-username" class="swal2-input" placeholder="Username">
+        <input type="password" id="login-password" class="swal2-input" placeholder="Password">
+      `,
+      focusConfirm: false,
       showCancelButton: true,
       confirmButtonText: 'Login',
       showLoaderOnConfirm: true,
-      preConfirm: (pass) => {
+      preConfirm: () => {
+        const u = document.getElementById('login-username').value;
+        const p = document.getElementById('login-password').value;
+
+        if (!u || !p) {
+          Swal.showValidationMessage('Please enter both username and password');
+          return false;
+        }
+
         return new Promise((resolve) => {
           google.script.run
             .withSuccessHandler(res => {
-               if(res.success) resolve(pass);
-               else Swal.showValidationMessage('รหัสผ่านไม่ถูกต้อง');
+               if(res.success) {
+                 resolve({ user: res.user, auth: { username: u, password: p } });
+               } else {
+                 Swal.showValidationMessage(res.message || 'Login failed');
+                 resolve(false);
+               }
             })
-            .adminLogin(pass);
+            .withFailureHandler(err => {
+               Swal.showValidationMessage('Error: ' + err.message);
+               resolve(false);
+            })
+            .adminLogin(u, p);
         });
       },
       allowOutsideClick: () => !Swal.isLoading()
     }).then((result) => {
-      if (result.isConfirmed) {
+      if (result.isConfirmed && result.value) {
         isAdmin = true;
-        adminToken = result.value;
+        currentUser = result.value.user;
+        adminAuth = result.value.auth;
+
         updateUIForAdmin();
         renderBookingsTable();
-        Swal.fire('Logged in', 'เข้าสู่ระบบผู้ดูแลสำเร็จ', 'success');
+        Swal.fire('Logged in', `Welcome ${currentUser.name}`, 'success');
       }
     });
   }
@@ -306,7 +327,7 @@
     }).then((result) => {
       if (result.isConfirmed) {
         showLoading(true);
-        google.script.run.withSuccessHandler(afterUpdate).updateBookingStatus(row, 'Approved', null, adminToken);
+        google.script.run.withSuccessHandler(afterUpdate).updateBookingStatus(row, 'Approved', null, currentUser, adminAuth);
       }
     });
   }
@@ -322,7 +343,7 @@
     }).then((result) => {
       if (result.isConfirmed) {
         showLoading(true);
-        google.script.run.withSuccessHandler(afterUpdate).updateBookingStatus(row, 'Rejected', result.value, adminToken);
+        google.script.run.withSuccessHandler(afterUpdate).updateBookingStatus(row, 'Rejected', result.value, currentUser, adminAuth);
       }
     });
   }

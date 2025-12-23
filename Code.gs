@@ -454,8 +454,9 @@ function updateBookingStatus(rowNumber, newStatus, reason, adminUser, auth) {
        return { success: false, message: 'Unauthorized: Invalid credentials.' };
     }
 
-    // adminUser object might just be for display, use auth for verification
-    const adminName = auth.name || auth.username || 'Admin';
+    // adminUser is the object {name, username, image} sent from frontend
+    // If available, use its name. Fallback to auth.username or 'Admin'
+    const adminName = (adminUser && adminUser.name) ? adminUser.name : (auth.username || 'Admin');
 
     if (!['Approved', 'Rejected'].includes(newStatus)) return { success: false, message: 'Invalid status.' };
 
