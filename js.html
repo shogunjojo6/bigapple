@@ -10,37 +10,68 @@
   let workChart = null;
 
   document.addEventListener('DOMContentLoaded', function() {
-    loadPublicVehicles();
-    loadBookings();
-    initEventListeners();
+    try {
+      console.log("App initializing...");
+      showLoading(true);
 
-    // No default dates for stats as requested
-    loadStats();
+      // Initialize Listeners first to ensure buttons work even if data fails
+      initEventListeners();
 
-    // Initialize Driving Mode state
-    toggleDriveOption();
+      // Load Data
+      loadPublicVehicles();
+      loadBookings();
+
+      // Admin stats (safe to call, will just return error if not admin)
+      loadStats();
+
+      // Initialize Driving Mode state
+      toggleDriveOption();
+
+    } catch (e) {
+      console.error("Critical Initialization Error:", e);
+      Swal.fire('System Error', 'Failed to initialize application. Please refresh.', 'error');
+      showLoading(false);
+    }
   });
 
   function initEventListeners() {
-    // Form Submission
-    const form = document.getElementById('bookingForm');
-    form.addEventListener('submit', handleFormSubmit);
+    try {
+      // Form Submission
+      const form = document.getElementById('bookingForm');
+      if (form) {
+        form.addEventListener('submit', handleFormSubmit);
+      } else {
+        console.warn('bookingForm not found');
+      }
 
-    // Dynamic Form Fields
-    document.getElementById('vehicleType').addEventListener('change', toggleOtherVehicle);
-    document.getElementById('workType').addEventListener('change', toggleOtherWork);
+      // Dynamic Form Fields
+      const vSelect = document.getElementById('vehicleType');
+      if (vSelect) vSelect.addEventListener('change', toggleOtherVehicle);
 
-    // Driving Mode Toggles
-    const driveRadios = document.querySelectorAll('input[name="driveOption"]');
-    driveRadios.forEach(el => el.addEventListener('change', toggleDriveOption));
+      const wSelect = document.getElementById('workType');
+      if (wSelect) wSelect.addEventListener('change', toggleOtherWork);
 
-    // Admin Login
-    document.getElementById('adminLoginBtn').addEventListener('click', showAdminLogin);
+      // Driving Mode Toggles
+      const driveRadios = document.querySelectorAll('input[name="driveOption"]');
+      driveRadios.forEach(el => el.addEventListener('change', toggleDriveOption));
 
-    // Filter Inputs
-    ['searchFilter', 'statusFilter', 'carFilter', 'filterStartDate', 'filterEndDate'].forEach(id => {
-      document.getElementById(id).addEventListener('input', renderBookingsTable);
-    });
+      // Admin Login
+      const loginBtn = document.getElementById('adminLoginBtn');
+      if (loginBtn) {
+        loginBtn.addEventListener('click', showAdminLogin);
+      } else {
+        console.warn('adminLoginBtn not found');
+      }
+
+      // Filter Inputs
+      ['searchFilter', 'statusFilter', 'carFilter', 'filterStartDate', 'filterEndDate'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', renderBookingsTable);
+      });
+
+    } catch (e) {
+      console.error("Error in initEventListeners:", e);
+    }
   }
 
   function escapeHtml(text) {
@@ -56,7 +87,8 @@
   // --- Core Functions ---
 
   function showLoading(show = true) {
-    document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+    const el = document.getElementById('loadingOverlay');
+    if (el) el.style.display = show ? 'flex' : 'none';
   }
 
   // --- Dynamic Vehicles Loading ---
@@ -65,7 +97,21 @@
       .withSuccessHandler(res => {
          if(res.success) {
            renderPublicVehicles(res.vehicles);
+         } else {
+           console.error("Failed to load vehicles:", res.message);
+           // Update UI to show error instead of infinite loading
+           const container = document.getElementById('calendarCardsContainer');
+           if (container) container.innerHTML = `<div class="col-12 text-center text-danger py-5">Unable to load vehicles: ${escapeHtml(res.message)}</div>`;
+
+           // Also update dropdown
+           const select = document.getElementById('vehicleType');
+           if (select) select.innerHTML = '<option disabled selected>Error loading vehicles</option>';
          }
+      })
+      .withFailureHandler(err => {
+         console.error("Server Error (loadPublicVehicles):", err);
+         const container = document.getElementById('calendarCardsContainer');
+         if (container) container.innerHTML = `<div class="col-12 text-center text-danger py-5">Connection Error. Please refresh.</div>`;
       })
       .getPublicVehicles();
   }
@@ -73,78 +119,81 @@
   function renderPublicVehicles(vehicles) {
     // 1. Populate Dropdown
     const select = document.getElementById('vehicleType');
-    select.innerHTML = '<option value="" selected disabled>-- เลือกรถ --</option>';
-    vehicles.forEach(v => {
-       const opt = document.createElement('option');
-       opt.value = v.name;
-       opt.textContent = v.name;
-       select.appendChild(opt);
-    });
-    // Add "Other"
-    const otherOpt = document.createElement('option');
-    otherOpt.value = 'อื่นๆ ให้ระบุ';
-    otherOpt.textContent = 'อื่นๆ ให้ระบุ';
-    select.appendChild(otherOpt);
+    if (select) {
+      select.innerHTML = '<option value="" selected disabled>-- เลือกรถ --</option>';
+      vehicles.forEach(v => {
+         const opt = document.createElement('option');
+         opt.value = v.name;
+         opt.textContent = v.name;
+         select.appendChild(opt);
+      });
+      // Add "Other"
+      const otherOpt = document.createElement('option');
+      otherOpt.value = 'อื่นๆ ให้ระบุ';
+      otherOpt.textContent = 'อื่นๆ ให้ระบุ';
+      select.appendChild(otherOpt);
+    }
 
     // 2. Populate Calendar Tab Cards
     const calContainer = document.getElementById('calendarCardsContainer');
-    calContainer.innerHTML = '';
+    if (calContainer) {
+      calContainer.innerHTML = '';
 
-    if (vehicles.length === 0) {
-      calContainer.innerHTML = '<div class="col-12 text-center text-muted py-5">No active vehicles available.</div>';
-    } else {
-      const colors = ['primary', 'info', 'success', 'warning', 'danger'];
-      vehicles.forEach((v, idx) => {
-         const color = colors[idx % colors.length];
-         // Only show if it has a calendar
-         if(!v.calendarId && !v.calendarUrl) return;
+      if (!vehicles || vehicles.length === 0) {
+        calContainer.innerHTML = '<div class="col-12 text-center text-muted py-5">No active vehicles available.</div>';
+      } else {
+        const colors = ['primary', 'info', 'success', 'warning', 'danger'];
+        vehicles.forEach((v, idx) => {
+           const color = colors[idx % colors.length];
+           // Only show if it has a calendar
+           if(!v.calendarId && !v.calendarUrl) return;
 
-         // Determine Link
-         let link = v.calendarUrl;
-         if (!link && v.calendarId) {
-            link = `https://calendar.google.com/calendar/u/0/embed?src=${v.calendarId}&ctz=Asia/Bangkok`;
-         }
+           // Determine Link
+           let link = v.calendarUrl;
+           if (!link && v.calendarId) {
+              link = `https://calendar.google.com/calendar/u/0/embed?src=${v.calendarId}&ctz=Asia/Bangkok`;
+           }
 
-         // Use uploaded image or placeholder if missing
-         // To display Drive image, we need correct URL.
-         // Assuming v.image is FILE ID, we convert to view link.
-         // Or if it's already a full URL, use it.
-         let imgHtml = '';
-         if (v.image) {
-            const imgSrc = v.image.startsWith('http') ? v.image : `https://drive.google.com/uc?export=view&id=${v.image}`;
-            imgHtml = `<img src="${imgSrc}" class="card-img-top" style="height:160px; object-fit:cover;" alt="${escapeHtml(v.name)}">`;
-         }
+           // Use uploaded image or placeholder if missing
+           let imgHtml = '';
+           if (v.image) {
+              const imgSrc = v.image.startsWith('http') ? v.image : `https://drive.google.com/uc?export=view&id=${v.image}`;
+              imgHtml = `<img src="${imgSrc}" class="card-img-top" style="height:160px; object-fit:cover;" alt="${escapeHtml(v.name)}">`;
+           }
 
-         const col = document.createElement('div');
-         col.className = 'col-md-6 col-lg-4';
-         col.innerHTML = `
-           <div class="card h-100 shadow-sm border-0 hover-lift">
-              ${imgHtml}
-              <div class="card-body text-center">
-                 <h5 class="card-title text-${color}">${escapeHtml(v.name)}</h5>
-                 <a href="${link}" target="_blank" class="btn btn-outline-${color} mt-3 rounded-pill w-100">
-                    <i class="fas fa-calendar-alt me-2"></i>${escapeHtml(v.buttonLabel || 'View Calendar')}
-                 </a>
-              </div>
-           </div>
-         `;
-         calContainer.appendChild(col);
-      });
+           const col = document.createElement('div');
+           col.className = 'col-md-6 col-lg-4';
+           col.innerHTML = `
+             <div class="card h-100 shadow-sm border-0 hover-lift">
+                ${imgHtml}
+                <div class="card-body text-center">
+                   <h5 class="card-title text-${color}">${escapeHtml(v.name)}</h5>
+                   <a href="${link}" target="_blank" class="btn btn-outline-${color} mt-3 rounded-pill w-100">
+                      <i class="fas fa-calendar-alt me-2"></i>${escapeHtml(v.buttonLabel || 'View Calendar')}
+                   </a>
+                </div>
+             </div>
+           `;
+           calContainer.appendChild(col);
+        });
+      }
     }
 
     // 3. Populate Filter Dropdown
     const filterSelect = document.getElementById('carFilter');
-    filterSelect.innerHTML = '<option value="all">รถทั้งหมด</option>';
-    vehicles.forEach(v => {
-       const opt = document.createElement('option');
-       opt.value = v.name;
-       opt.textContent = v.name;
-       filterSelect.appendChild(opt);
-    });
-    const otherF = document.createElement('option');
-    otherF.value = 'อื่นๆ ให้ระบุ';
-    otherF.textContent = 'อื่นๆ ให้ระบุ';
-    filterSelect.appendChild(otherF);
+    if (filterSelect) {
+      filterSelect.innerHTML = '<option value="all">รถทั้งหมด</option>';
+      vehicles.forEach(v => {
+         const opt = document.createElement('option');
+         opt.value = v.name;
+         opt.textContent = v.name;
+         filterSelect.appendChild(opt);
+      });
+      const otherF = document.createElement('option');
+      otherF.value = 'อื่นๆ ให้ระบุ';
+      otherF.textContent = 'อื่นๆ ให้ระบุ';
+      filterSelect.appendChild(otherF);
+    }
   }
 
   function handleFormSubmit(e) {
@@ -156,7 +205,9 @@
     }
 
     // Collect Data
-    const driveOpt = document.querySelector('input[name="driveOption"]:checked').value;
+    const driveOptEl = document.querySelector('input[name="driveOption"]:checked');
+    const driveOpt = driveOptEl ? driveOptEl.value : 'SELF';
+    const hasLicenseEl = document.getElementById('hasLicense');
 
     const formData = {
       name: val('name'),
@@ -189,14 +240,14 @@
 
       // New Fields
       driveOption: driveOpt,
-      hasLicense: (driveOpt === 'SELF' && document.getElementById('hasLicense').checked) ? true : false,
+      hasLicense: (driveOpt === 'SELF' && hasLicenseEl && hasLicenseEl.checked) ? true : false,
       driverName: (driveOpt === 'DRIVER') ? val('driverName') : ''
     };
 
     // Handle "Other" logic
     const vType = val('vehicleType');
     formData.vehicleTypes = (vType === 'อื่นๆ ให้ระบุ' || vType === 'other') ? `อื่นๆ: ${val('vehicleOther')}` : vType;
-    formData.car = formData.vehicleTypes; // In original logic, car == vehicleTypes mostly
+    formData.car = formData.vehicleTypes;
 
     const wType = val('workType');
     formData.workTypes = (wType === 'otherWork') ? `อื่นๆ: ${val('workOther')}` : wType;
@@ -212,7 +263,8 @@
           // Reset driving mode state
           toggleDriveOption();
           // Switch to list tab
-          new bootstrap.Tab(document.querySelector('#nav-list-tab')).show();
+          const listTab = document.querySelector('#nav-list-tab');
+          if (listTab) new bootstrap.Tab(listTab).show();
           loadBookings();
         } else {
           Swal.fire('เกิดข้อผิดพลาด', res.message, 'error');
@@ -226,12 +278,11 @@
   }
 
   function loadBookings() {
-    showLoading(true);
     google.script.run
       .withSuccessHandler(res => {
-        showLoading(false);
+        showLoading(false); // Ensure loader stops
         if (res.ok) {
-          allBookings = res.bookings;
+          allBookings = res.bookings || [];
           // Maintain admin status if already logged in via client-side token
           if (adminAuth) {
              isAdmin = true;
@@ -241,19 +292,31 @@
           updateUIForAdmin();
           renderBookingsTable();
         } else {
-          console.error(res.error);
+          console.error("Failed load bookings:", res.error);
+          const tbody = document.getElementById('bookingTableBody');
+          if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Error: ${escapeHtml(res.error)}</td></tr>`;
         }
       })
       .withFailureHandler(err => {
         showLoading(false);
-        console.error(err);
+        console.error("Server Error (getBookings):", err);
+        const tbody = document.getElementById('bookingTableBody');
+        if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Connection Error</td></tr>`;
+        // Only alert if we are on the list tab?
+        // Swal.fire('Error', 'Failed to load bookings.', 'error');
       })
       .getBookings();
   }
 
   function renderBookingsTable() {
     const tbody = document.getElementById('bookingTableBody');
+    if (!tbody) return;
     tbody.innerHTML = '';
+
+    if (!allBookings || allBookings.length === 0) {
+       tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4">No records found.</td></tr>';
+       return;
+    }
 
     const filterText = val('searchFilter').toLowerCase();
     const filterStatus = val('statusFilter');
@@ -271,13 +334,13 @@
       // Date Range Filter
       let matchDate = true;
       if (filterStart) matchDate = matchDate && (b.date >= filterStart);
-      if (filterEnd) matchDate = matchDate && (b.date <= filterEnd); // Assuming b.date is YYYY-MM-DD format
+      if (filterEnd) matchDate = matchDate && (b.date <= filterEnd);
 
       return matchText && matchStatus && matchCar && matchDate;
     });
 
     if (filtered.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4">ไม่พบข้อมูลการจอง</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4">ไม่พบข้อมูลตามเงื่อนไข</td></tr>';
       return;
     }
 
@@ -360,17 +423,26 @@
     isAdmin = false;
     currentUser = null;
     adminAuth = null;
-    document.getElementById('adminTabLink').classList.add('d-none');
-    document.getElementById('adminLoginBtn').classList.remove('d-none');
+    const tabLink = document.getElementById('adminTabLink');
+    if (tabLink) tabLink.classList.add('d-none');
+
+    const loginBtn = document.getElementById('adminLoginBtn');
+    if (loginBtn) loginBtn.classList.remove('d-none');
+
     // Switch to home
-    new bootstrap.Tab(document.querySelector('#nav-home-tab')).show();
+    const homeTab = document.querySelector('#nav-home-tab');
+    if (homeTab) new bootstrap.Tab(homeTab).show();
+
     renderBookingsTable();
   }
 
   function updateUIForAdmin() {
     if (isAdmin) {
-      document.getElementById('adminTabLink').classList.remove('d-none');
-      document.getElementById('adminLoginBtn').classList.add('d-none');
+      const tabLink = document.getElementById('adminTabLink');
+      if (tabLink) tabLink.classList.remove('d-none');
+
+      const loginBtn = document.getElementById('adminLoginBtn');
+      if (loginBtn) loginBtn.classList.add('d-none');
     }
   }
 
@@ -400,25 +472,27 @@
     google.script.run.withSuccessHandler(res => {
       if(res.success) {
         const tbody = document.getElementById('adminsTableBody');
-        tbody.innerHTML = '';
-        res.admins.forEach(a => {
-           // Display logic
-           const avatarUrl = a.avatar ? (a.avatar.startsWith('http') ? a.avatar : `https://drive.google.com/uc?export=view&id=${a.avatar}`) : 'https://via.placeholder.com/40';
+        if (tbody) {
+          tbody.innerHTML = '';
+          res.admins.forEach(a => {
+             // Display logic
+             const avatarUrl = a.avatar ? (a.avatar.startsWith('http') ? a.avatar : `https://drive.google.com/uc?export=view&id=${a.avatar}`) : 'https://via.placeholder.com/40';
 
-           const tr = document.createElement('tr');
-           tr.innerHTML = `
-             <td><img src="${avatarUrl}" class="rounded-circle border" width="40" height="40" style="object-fit:cover;"></td>
-             <td>${escapeHtml(a.username)}</td>
-             <td>${escapeHtml(a.fullName)}</td>
-             <td>${escapeHtml(a.email)}</td>
-             <td><span class="badge bg-secondary">${escapeHtml(a.role)}</span></td>
-             <td>${a.isActive ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-danger">Inactive</span>'}</td>
-             <td>
-               <button class="btn btn-sm btn-primary" onclick='openAdminModal(${JSON.stringify(JSON.stringify(a))})'><i class="fas fa-edit"></i></button>
-             </td>
-           `;
-           tbody.appendChild(tr);
-        });
+             const tr = document.createElement('tr');
+             tr.innerHTML = `
+               <td><img src="${avatarUrl}" class="rounded-circle border" width="40" height="40" style="object-fit:cover;"></td>
+               <td>${escapeHtml(a.username)}</td>
+               <td>${escapeHtml(a.fullName)}</td>
+               <td>${escapeHtml(a.email)}</td>
+               <td><span class="badge bg-secondary">${escapeHtml(a.role)}</span></td>
+               <td>${a.isActive ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-danger">Inactive</span>'}</td>
+               <td>
+                 <button class="btn btn-sm btn-primary" onclick='openAdminModal(${JSON.stringify(JSON.stringify(a))})'><i class="fas fa-edit"></i></button>
+               </td>
+             `;
+             tbody.appendChild(tr);
+          });
+        }
       }
     }).getAllAdmins(adminAuth);
   }
@@ -430,12 +504,12 @@
     document.getElementById('adminModalTitle').innerText = isEdit ? 'Edit Admin' : 'Add New Admin';
     document.getElementById('adminEditId').value = admin.id || '';
     document.getElementById('adminUsername').value = admin.username || '';
-    document.getElementById('adminUsername').disabled = isEdit; // Prevent changing username on edit
+    document.getElementById('adminUsername').disabled = isEdit;
     document.getElementById('adminPassword').value = '';
     document.getElementById('adminFullName').value = admin.fullName || '';
     document.getElementById('adminEmail').value = admin.email || '';
     document.getElementById('adminRole').value = admin.role || 'Admin';
-    document.getElementById('adminIsActive').checked = (admin.isActive !== false); // Default true
+    document.getElementById('adminIsActive').checked = (admin.isActive !== false);
 
     document.getElementById('adminAvatarId').value = admin.avatar || '';
     const prevUrl = admin.avatar ? (admin.avatar.startsWith('http') ? admin.avatar : `https://drive.google.com/uc?export=view&id=${admin.avatar}`) : 'https://via.placeholder.com/100';
@@ -468,7 +542,7 @@
            showLoading(true);
            google.script.run.withSuccessHandler(res => {
               if(res.success) {
-                 data.avatar = res.fileId; // Use new file ID
+                 data.avatar = res.fileId;
                  saveAdminData(data);
               } else {
                  showLoading(false);
@@ -501,23 +575,25 @@
     google.script.run.withSuccessHandler(res => {
        if(res.success) {
           const tbody = document.getElementById('vehiclesTableBody');
-          tbody.innerHTML = '';
-          res.vehicles.forEach(v => {
-             const imgUrl = v.image ? (v.image.startsWith('http') ? v.image : `https://drive.google.com/uc?export=view&id=${v.image}`) : 'https://via.placeholder.com/50';
+          if (tbody) {
+            tbody.innerHTML = '';
+            res.vehicles.forEach(v => {
+               const imgUrl = v.image ? (v.image.startsWith('http') ? v.image : `https://drive.google.com/uc?export=view&id=${v.image}`) : 'https://via.placeholder.com/50';
 
-             const tr = document.createElement('tr');
-             tr.innerHTML = `
-               <td><img src="${imgUrl}" class="rounded border" width="60" height="40" style="object-fit:cover;"></td>
-               <td>${escapeHtml(v.name)}</td>
-               <td><small class="text-muted text-break" style="max-width:200px;display:block;">${escapeHtml(v.calendarId)}</small></td>
-               <td>${v.isActive ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>'}</td>
-               <td>
-                 <button class="btn btn-sm btn-primary" onclick='openVehicleModal(${JSON.stringify(JSON.stringify(v))})'><i class="fas fa-edit"></i></button>
-                 <button class="btn btn-sm btn-danger ms-1" onclick="deleteVehicle('${v.id}')"><i class="fas fa-trash"></i></button>
-               </td>
-             `;
-             tbody.appendChild(tr);
-          });
+               const tr = document.createElement('tr');
+               tr.innerHTML = `
+                 <td><img src="${imgUrl}" class="rounded border" width="60" height="40" style="object-fit:cover;"></td>
+                 <td>${escapeHtml(v.name)}</td>
+                 <td><small class="text-muted text-break" style="max-width:200px;display:block;">${escapeHtml(v.calendarId)}</small></td>
+                 <td>${v.isActive ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>'}</td>
+                 <td>
+                   <button class="btn btn-sm btn-primary" onclick='openVehicleModal(${JSON.stringify(JSON.stringify(v))})'><i class="fas fa-edit"></i></button>
+                   <button class="btn btn-sm btn-danger ms-1" onclick="deleteVehicle('${v.id}')"><i class="fas fa-trash"></i></button>
+                 </td>
+               `;
+               tbody.appendChild(tr);
+            });
+          }
        }
     }).getAllVehicles(adminAuth);
   }
@@ -583,7 +659,6 @@
            bootstrap.Modal.getInstance(document.getElementById('vehicleModal')).hide();
            Swal.fire('Saved', 'Vehicle saved.', 'success');
            loadVehiclesAdmin();
-           // Also refresh public view implicitly next time
         } else {
            Swal.fire('Error', res.message, 'error');
         }
@@ -716,22 +791,26 @@
   // --- Statistics & Dashboard ---
 
   function loadStats() {
-    const start = document.getElementById('statStart').value;
-    const end = document.getElementById('statEnd').value;
+    const start = document.getElementById('statStart');
+    const end = document.getElementById('statEnd');
+    if(!start || !end) return;
 
-    google.script.run.withSuccessHandler(renderStats).getStats(start, end);
+    google.script.run.withSuccessHandler(renderStats).getStats(start.value, end.value);
   }
 
   function renderStats(data) {
     if (!data.success) return;
-    document.getElementById('totalBookings').innerText = data.total;
+    const totalEl = document.getElementById('totalBookings');
+    if(totalEl) totalEl.innerText = data.total;
 
     updateChart('carChartCtx', data.byCar, 'รถที่ถูกใช้งานมากที่สุด');
     updateChart('workChartCtx', data.byWork, 'ประเภทงานยอดนิยม', 'doughnut');
   }
 
   function updateChart(canvasId, dataObj, label, type='pie') {
-    const ctx = document.getElementById(canvasId).getContext('2d');
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     const labels = Object.keys(dataObj);
     const data = Object.values(dataObj);
     const total = data.reduce((a, b) => a + b, 0);
@@ -816,25 +895,35 @@
   // --- Helpers ---
 
   function val(id) {
-    return document.getElementById(id).value.trim();
+    const el = document.getElementById(id);
+    return el ? el.value.trim() : '';
   }
 
   function toggleOtherVehicle() {
-    const val = document.getElementById('vehicleType').value;
+    const el = document.getElementById('vehicleType');
+    if(!el) return;
+    const val = el.value;
     const isOther = val === 'อื่นๆ ให้ระบุ' || val === 'other';
-    document.getElementById('vehicleOtherDiv').style.display = isOther ? 'block' : 'none';
-    document.getElementById('vehicleOther').required = isOther;
+    const otherDiv = document.getElementById('vehicleOtherDiv');
+    if(otherDiv) otherDiv.style.display = isOther ? 'block' : 'none';
+    const otherInput = document.getElementById('vehicleOther');
+    if(otherInput) otherInput.required = isOther;
   }
 
   function toggleOtherWork() {
-    const val = document.getElementById('workType').value;
+    const el = document.getElementById('workType');
+    if(!el) return;
+    const val = el.value;
     const isOther = val === 'otherWork';
-    document.getElementById('workOtherDiv').style.display = isOther ? 'block' : 'none';
-    document.getElementById('workOther').required = isOther;
+    const otherDiv = document.getElementById('workOtherDiv');
+    if(otherDiv) otherDiv.style.display = isOther ? 'block' : 'none';
+    const otherInput = document.getElementById('workOther');
+    if(otherInput) otherInput.required = isOther;
   }
 
   function toggleDest2() {
     const d2 = document.getElementById('dest2Container');
+    if(!d2) return;
     if (d2.style.display === 'none') {
       d2.style.display = 'block';
     } else {
@@ -853,13 +942,13 @@
     const inputDriver = document.getElementById('driverName');
 
     if (isSelf) {
-      divLicense.classList.remove('d-none');
-      divDriver.classList.add('d-none');
-      inputDriver.required = false;
+      if(divLicense) divLicense.classList.remove('d-none');
+      if(divDriver) divDriver.classList.add('d-none');
+      if(inputDriver) inputDriver.required = false;
     } else {
-      divLicense.classList.add('d-none');
-      divDriver.classList.remove('d-none');
-      inputDriver.required = true;
+      if(divLicense) divLicense.classList.add('d-none');
+      if(divDriver) divDriver.classList.remove('d-none');
+      if(inputDriver) inputDriver.required = true;
     }
   }
 
