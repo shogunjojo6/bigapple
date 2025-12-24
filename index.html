@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ระบบจองรถส่วนกลาง - QTC Energy</title>
+
+  <!-- CSS Libraries -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+  <?!= include('css'); ?>
+</head>
+<body>
+
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay">
+    <span class="loader"></span>
+    <p class="mt-3 fw-bold text-primary">Processing...</p>
+  </div>
+
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-glass sticky-top mb-4">
+    <div class="container">
+      <a class="navbar-brand fw-bold text-primary" href="#">
+        <i class="fas fa-car-side me-2"></i>QTC Booking
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="nav nav-pills ms-auto" id="mainTab" role="tablist">
+          <li class="nav-item">
+            <button class="nav-link active" id="nav-home-tab" data-bs-toggle="tab" data-bs-target="#nav-home" type="button"><i class="fas fa-home me-1"></i> จองรถ</button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" id="nav-list-tab" data-bs-toggle="tab" data-bs-target="#nav-list" type="button"><i class="fas fa-list me-1"></i> รายการจอง</button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" id="nav-calendar-tab" data-bs-toggle="tab" data-bs-target="#nav-calendar" type="button"><i class="fas fa-calendar-alt me-1"></i> ปฏิทิน</button>
+          </li>
+          <li class="nav-item d-none" id="adminTabLink">
+            <button class="nav-link" id="nav-admin-tab" data-bs-toggle="tab" data-bs-target="#nav-admin" type="button"><i class="fas fa-chart-pie me-1"></i> Dashboard</button>
+          </li>
+        </ul>
+        <button class="btn btn-outline-primary ms-2 btn-sm" id="adminLoginBtn"><i class="fas fa-user-shield"></i> Login</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container pb-5">
+
+    <div class="tab-content" id="nav-tabContent">
+
+      <!-- 1. Booking Form Tab -->
+      <div class="tab-pane fade show active" id="nav-home" role="tabpanel">
+        <div class="row justify-content-center">
+          <div class="col-lg-10">
+            <div class="glass-card p-4 fade-in">
+              <h3 class="mb-4 text-primary"><i class="fas fa-edit me-2"></i>แบบฟอร์มขอใช้รถ</h3>
+              <form id="bookingForm" class="needs-validation" novalidate>
+
+                <!-- Section 1: User Info -->
+                <h5 class="text-secondary mb-3 border-bottom pb-2">1. ข้อมูลผู้จอง</h5>
+                <div class="row g-3 mb-4">
+                  <div class="col-md-4">
+                    <label class="form-label">ชื่อผู้จอง</label>
+                    <input type="text" class="form-control" id="name" required>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">แผนก/หน่วยงาน</label>
+                    <input type="text" class="form-control" id="department" required>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">อีเมลบริษัท (@qtc-energy.com)</label>
+                    <input type="email" class="form-control" id="email" required placeholder="example@qtc-energy.com">
+                  </div>
+                </div>
+
+                <!-- Section 2: Trip Details -->
+                <h5 class="text-secondary mb-3 border-bottom pb-2">2. รายละเอียดการเดินทาง</h5>
+                <div class="row g-3 mb-4">
+                  <div class="col-md-6">
+                    <label class="form-label">วันที่เริ่มใช้</label>
+                    <input type="date" class="form-control" id="date" required>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">เวลาเริ่ม</label>
+                    <input type="time" class="form-control" id="startTime" value="00:00" required>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">วันที่คืนรถ</label>
+                    <input type="date" class="form-control" id="returnDate" required>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">เวลาคืน</label>
+                    <input type="time" class="form-control" id="returnTime" value="00:00" required>
+                  </div>
+
+                  <div class="col-md-6">
+                    <label class="form-label">ประเภทงาน</label>
+                    <select class="form-select" id="workType" required>
+                      <option value="" selected disabled>-- เลือกประเภทงาน --</option>
+                      <option value="ส่งหม้อแปลงไฟฟ้า">ส่งหม้อแปลงไฟฟ้า</option>
+                      <option value="ติดตั้งอุปกรณ์หม้อแปลงไฟฟ้า">ติดตั้งอุปกรณ์หม้อแปลงไฟฟ้า</option>
+                      <option value="รับ-ส่งพนักงาน">รับ-ส่งพนักงาน</option>
+                      <option value="รับ-ส่งลูกค้า">รับ-ส่งลูกค้า</option>
+                      <option value="otherWork">อื่นๆ ให้ระบุ</option>
+                    </select>
+                    <div id="workOtherDiv" class="mt-2" style="display:none;">
+                       <input type="text" class="form-control" id="workOther" placeholder="ระบุงานอื่นๆ">
+                    </div>
+                  </div>
+
+                  <div class="col-md-6">
+                    <label class="form-label">รถที่ต้องการ</label>
+                    <select class="form-select" id="vehicleType" required>
+                      <option value="" selected disabled>Loading...</option>
+                      <!-- Dynamic Options -->
+                    </select>
+                    <div id="vehicleOtherDiv" class="mt-2" style="display:none;">
+                       <input type="text" class="form-control" id="vehicleOther" placeholder="ระบุรถอื่นๆ">
+                    </div>
+                  </div>
+
+                  <!-- NEW DRIVING MODE -->
+                  <div class="col-12 mt-2">
+                    <label class="form-label d-block">รูปแบบการขับขี่ (Driving Option)</label>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="radio" name="driveOption" id="driveSelf" value="SELF" checked>
+                      <label class="form-check-label" for="driveSelf">ขับเอง (Self-drive)</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="radio" name="driveOption" id="driveDriver" value="DRIVER">
+                      <label class="form-check-label" for="driveDriver">ต้องการคนขับ (Driver required)</label>
+                    </div>
+                  </div>
+
+                  <div class="col-12" id="divHasLicense">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="hasLicense">
+                      <label class="form-check-label" for="hasLicense">ข้าพเจ้ามีใบอนุญาตขับขี่รถยนต์ที่ยังไม่หมดอายุ (I have a valid driving license)</label>
+                    </div>
+                  </div>
+
+                  <div class="col-md-6 d-none" id="divDriverName">
+                    <label class="form-label">ชื่อคนขับรถ (Driver Name)</label>
+                    <input type="text" class="form-control" id="driverName">
+                  </div>
+                  <!-- END NEW DRIVING MODE -->
+
+                </div>
+
+                <!-- Section 3: Locations -->
+                <h5 class="text-secondary mb-3 border-bottom pb-2">3. สถานที่</h5>
+
+                <div class="card bg-light mb-3 border-0">
+                  <div class="card-body">
+                    <h6 class="card-title text-success"><i class="fas fa-map-marker-alt me-1"></i> ต้นทาง (Origin)</h6>
+                    <div class="row g-2">
+                       <div class="col-md-6"><input class="form-control form-control-sm" id="originPlace" placeholder="ชื่อสถานที่" required></div>
+                       <div class="col-md-6"><input class="form-control form-control-sm" id="originContact" placeholder="ผู้ติดต่อ/เบอร์โทร" required></div>
+                       <div class="col-12"><input class="form-control form-control-sm" id="originAddress" placeholder="ที่อยู่" required></div>
+                       <div class="col-md-6"><input class="form-control form-control-sm" id="originMap" placeholder="ลิงก์ Google Maps"></div>
+                       <div class="col-md-6"><input class="form-control form-control-sm" id="originReason" placeholder="หมายเหตุ (ถ้ามี)"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card bg-light mb-3 border-0">
+                  <div class="card-body">
+                    <h6 class="card-title text-danger"><i class="fas fa-map-marker-alt me-1"></i> ปลายทางที่ 1 (Destination 1)</h6>
+                    <div class="row g-2">
+                       <div class="col-md-6"><input class="form-control form-control-sm" id="dest1Place" placeholder="ชื่อสถานที่" required></div>
+                       <div class="col-md-6"><input class="form-control form-control-sm" id="dest1Contact" placeholder="ผู้ติดต่อ/เบอร์โทร" required></div>
+                       <div class="col-12"><input class="form-control form-control-sm" id="dest1Address" placeholder="ที่อยู่" required></div>
+                       <div class="col-md-6"><input class="form-control form-control-sm" id="dest1Map" placeholder="ลิงก์ Google Maps"></div>
+                       <div class="col-md-6"><input class="form-control form-control-sm" id="dest1Reason" placeholder="หมายเหตุ (ถ้ามี)"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="text-end mb-3">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleDest2()"><i class="fas fa-plus"></i> เพิ่มปลายทางที่ 2</button>
+                </div>
+
+                <div id="dest2Container" style="display:none;" class="card bg-light mb-4 border-0 fade-in">
+                  <div class="card-body">
+                    <h6 class="card-title text-danger"><i class="fas fa-map-marker-alt me-1"></i> ปลายทางที่ 2 (Destination 2)</h6>
+                    <div class="row g-2">
+                       <div class="col-md-6"><input class="form-control form-control-sm" id="dest2Place" placeholder="ชื่อสถานที่"></div>
+                       <div class="col-md-6"><input class="form-control form-control-sm" id="dest2Contact" placeholder="ผู้ติดต่อ/เบอร์โทร"></div>
+                       <div class="col-12"><input class="form-control form-control-sm" id="dest2Address" placeholder="ที่อยู่"></div>
+                       <div class="col-md-6"><input class="form-control form-control-sm" id="dest2Map" placeholder="ลิงก์ Google Maps"></div>
+                       <div class="col-md-6"><input class="form-control form-control-sm" id="dest2Reason" placeholder="หมายเหตุ (ถ้ามี)"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mb-4">
+                  <label class="form-label">รายละเอียดเพิ่มเติม</label>
+                  <textarea class="form-control" id="extraDetails" rows="2"></textarea>
+                </div>
+
+                <div class="d-grid">
+                  <button type="submit" class="btn btn-primary-gradient btn-lg py-3 rounded-pill fw-bold">
+                    <i class="fas fa-paper-plane me-2"></i>ส่งคำขอจองรถ
+                  </button>
+                </div>
+
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Booking List Tab -->
+      <div class="tab-pane fade" id="nav-list" role="tabpanel">
+        <div class="glass-card p-4">
+          <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+            <h3 class="text-primary m-0">รายการจองทั้งหมด</h3>
+            <div class="d-flex gap-2">
+              <button class="btn btn-outline-primary btn-sm" onclick="loadBookings()"><i class="fas fa-sync"></i> Refresh</button>
+            </div>
+          </div>
+
+          <!-- Filters -->
+          <div class="row g-2 mb-3">
+            <div class="col-md-4">
+              <input type="text" class="form-control" id="searchFilter" placeholder="ค้นหา ชื่อ, แผนก, สถานที่...">
+            </div>
+            <div class="col-md-3">
+              <select class="form-select" id="statusFilter">
+                <option value="all">สถานะทั้งหมด</option>
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <select class="form-select" id="carFilter">
+                <option value="all">รถทั้งหมด</option>
+                <!-- Dynamic loaded here as well if needed, but 'All' handles it -->
+              </select>
+            </div>
+            <div class="col-md-2">
+              <input type="date" class="form-control" id="filterStartDate" placeholder="Start Date">
+            </div>
+            <div class="col-md-2">
+              <input type="date" class="form-control" id="filterEndDate" placeholder="End Date">
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead>
+                <tr>
+                  <th width="15%">วันที่ใช้</th>
+                  <th width="15%">ผู้จอง</th>
+                  <th width="20%">รถ</th>
+                  <th width="20%">ปลายทาง</th>
+                  <th width="15%">งาน</th>
+                  <th width="10%">สถานะ</th>
+                  <th width="5%">Action</th>
+                </tr>
+              </thead>
+              <tbody id="bookingTableBody">
+                <!-- JS will populate this -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Calendar Tab -->
+      <div class="tab-pane fade" id="nav-calendar" role="tabpanel">
+        <div class="glass-card p-4">
+           <h3 class="text-primary mb-4">ตารางการใช้รถ (Google Calendar)</h3>
+           <div class="row g-4" id="calendarCardsContainer">
+              <!-- Dynamic Cards -->
+              <div class="col-12 text-center text-muted py-5"><i class="fas fa-spinner fa-spin fa-2x"></i><br>Loading calendars...</div>
+           </div>
+        </div>
+      </div>
+
+      <!-- 4. Admin Dashboard Tab -->
+      <div class="tab-pane fade" id="nav-admin" role="tabpanel">
+        <div class="glass-card p-4">
+          <?!= include('admin_dashboard'); ?>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- JS Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <?!= include('js'); ?>
+</body>
+</html>

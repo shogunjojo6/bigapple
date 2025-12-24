@@ -1,0 +1,226 @@
+<!-- Admin Dashboard Content (Included in #nav-admin) -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h3 class="text-primary"><i class="fas fa-cogs me-2"></i>Admin Dashboard</h3>
+  <div class="d-flex gap-2">
+     <button class="btn btn-outline-secondary btn-sm" onclick="logoutAdmin()"><i class="fas fa-sign-out-alt"></i> Logout</button>
+  </div>
+</div>
+
+<ul class="nav nav-tabs mb-4" id="adminTabs" role="tablist">
+  <li class="nav-item">
+    <button class="nav-link active" id="tab-stats-link" data-bs-toggle="tab" data-bs-target="#tab-stats" type="button">Stats</button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" id="tab-admins-link" data-bs-toggle="tab" data-bs-target="#tab-admins" type="button" onclick="loadAdmins()">Manage Admins</button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" id="tab-vehicles-link" data-bs-toggle="tab" data-bs-target="#tab-vehicles" type="button" onclick="loadVehiclesAdmin()">Manage Vehicles</button>
+  </li>
+</ul>
+
+<div class="tab-content">
+
+  <!-- Stats Tab -->
+  <div class="tab-pane fade show active" id="tab-stats">
+      <div class="d-flex justify-content-end gap-2 mb-3">
+        <input type="date" id="statStart" class="form-control form-control-sm" style="width:auto;">
+        <span class="align-self-center">-</span>
+        <input type="date" id="statEnd" class="form-control form-control-sm" style="width:auto;">
+        <button class="btn btn-primary btn-sm" onclick="loadStats()">Update</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportSummaryPdf()"><i class="fas fa-file-pdf"></i> Report</button>
+      </div>
+
+      <div class="row g-4 mb-4">
+         <div class="col-md-12">
+           <div class="card border-left-primary shadow h-100 py-2">
+              <div class="card-body">
+                 <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                       <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Bookings</div>
+                       <div class="h3 mb-0 font-weight-bold text-gray-800" id="totalBookings">-</div>
+                    </div>
+                    <div class="col-auto">
+                       <i class="fas fa-calendar fa-2x text-gray-300"></i>
+                    </div>
+                 </div>
+              </div>
+           </div>
+         </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-6 mb-4">
+           <div class="card shadow mb-4">
+              <div class="card-header py-3">
+                 <h6 class="m-0 font-weight-bold text-primary">การใช้งานรถ (Vehicle Usage)</h6>
+              </div>
+              <div class="card-body">
+                 <canvas id="carChartCtx"></canvas>
+              </div>
+           </div>
+        </div>
+        <div class="col-md-6 mb-4">
+           <div class="card shadow mb-4">
+              <div class="card-header py-3">
+                 <h6 class="m-0 font-weight-bold text-primary">ประเภทงาน (Work Types)</h6>
+              </div>
+              <div class="card-body">
+                 <canvas id="workChartCtx"></canvas>
+              </div>
+           </div>
+        </div>
+      </div>
+  </div>
+
+  <!-- Admins Management Tab -->
+  <div class="tab-pane fade" id="tab-admins">
+    <div class="d-flex justify-content-between mb-3">
+      <h5>Admin Accounts</h5>
+      <button class="btn btn-success btn-sm" onclick="openAdminModal()"><i class="fas fa-plus"></i> Add Admin</button>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-bordered table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Avatar</th>
+            <th>Username</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="adminsTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Vehicles Management Tab -->
+  <div class="tab-pane fade" id="tab-vehicles">
+    <div class="d-flex justify-content-between mb-3">
+      <h5>Vehicle & Calendar Configuration</h5>
+      <button class="btn btn-success btn-sm" onclick="openVehicleModal()"><i class="fas fa-plus"></i> Add Vehicle</button>
+    </div>
+    <div class="alert alert-info py-2"><small><i class="fas fa-info-circle"></i> Vehicles set to <strong>Inactive</strong> will not appear in the booking form or calendar tab for normal users.</small></div>
+    <div class="table-responsive">
+      <table class="table table-bordered table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Image</th>
+            <th>Display Name</th>
+            <th>Calendar ID</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="vehiclesTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Admin Modal -->
+<div class="modal fade" id="adminModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="adminModalTitle">Add/Edit Admin</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="adminForm">
+          <input type="hidden" id="adminEditId">
+          <div class="text-center mb-3">
+             <img id="adminPreviewImg" src="https://via.placeholder.com/100" class="rounded-circle border" width="100" height="100" style="object-fit:cover;">
+             <div class="mt-2">
+               <label class="btn btn-outline-primary btn-sm btn-file">
+                  Upload Avatar <input type="file" id="adminAvatarFile" style="display: none;" accept="image/*" onchange="previewFile('adminAvatarFile','adminPreviewImg')">
+               </label>
+               <input type="hidden" id="adminAvatarId">
+             </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Username</label>
+            <input type="text" class="form-control" id="adminUsername" required>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Password</label>
+            <input type="password" class="form-control" id="adminPassword" placeholder="Leave blank if unchanged">
+          </div>
+          <div class="mb-2">
+             <label class="form-label">Full Name</label>
+             <input type="text" class="form-control" id="adminFullName">
+          </div>
+          <div class="mb-2">
+             <label class="form-label">Email</label>
+             <input type="email" class="form-control" id="adminEmail">
+          </div>
+          <div class="mb-2">
+             <label class="form-label">Role</label>
+             <select class="form-select" id="adminRole">
+               <option value="Admin">Admin</option>
+               <option value="SuperAdmin">SuperAdmin</option>
+             </select>
+          </div>
+          <div class="form-check form-switch mt-3">
+             <input class="form-check-input" type="checkbox" id="adminIsActive" checked>
+             <label class="form-check-label">Active Account</label>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" onclick="submitAdminForm()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Vehicle Modal -->
+<div class="modal fade" id="vehicleModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="vehicleModalTitle">Add/Edit Vehicle</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="vehicleForm">
+          <input type="hidden" id="vehicleEditId">
+          <div class="text-center mb-3">
+             <img id="vehiclePreviewImg" src="https://via.placeholder.com/150x100" class="img-thumbnail" style="height:100px; object-fit:cover;">
+             <div class="mt-2">
+               <label class="btn btn-outline-primary btn-sm btn-file">
+                  Upload Image <input type="file" id="vehicleImageFile" style="display: none;" accept="image/*" onchange="previewFile('vehicleImageFile','vehiclePreviewImg')">
+               </label>
+               <input type="hidden" id="vehicleImageId">
+             </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Display Name (Car)</label>
+            <input type="text" class="form-control" id="vehicleName" required placeholder="e.g. [รถ 6 ล้อ][ISUZU][...]">
+            <small class="text-muted">Must be unique.</small>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Google Calendar ID</label>
+            <input type="text" class="form-control" id="vehicleCalId" required placeholder="...group.calendar.google.com">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Button Label (Optional)</label>
+            <input type="text" class="form-control" id="vehicleBtnLabel" placeholder="e.g. เปิดปฏิทิน">
+          </div>
+          <div class="form-check form-switch mt-3">
+             <input class="form-check-input" type="checkbox" id="vehicleIsActive" checked>
+             <label class="form-check-label">Active (Visible to users)</label>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" onclick="submitVehicleForm()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
