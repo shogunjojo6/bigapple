@@ -10,6 +10,7 @@
   let workChart = null;
 
   document.addEventListener('DOMContentLoaded', function() {
+    loadPublicVehicles();
     loadBookings();
     initEventListeners();
 
@@ -56,6 +57,94 @@
 
   function showLoading(show = true) {
     document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+  }
+
+  // --- Dynamic Vehicles Loading ---
+  function loadPublicVehicles() {
+    google.script.run
+      .withSuccessHandler(res => {
+         if(res.success) {
+           renderPublicVehicles(res.vehicles);
+         }
+      })
+      .getPublicVehicles();
+  }
+
+  function renderPublicVehicles(vehicles) {
+    // 1. Populate Dropdown
+    const select = document.getElementById('vehicleType');
+    select.innerHTML = '<option value="" selected disabled>-- เลือกรถ --</option>';
+    vehicles.forEach(v => {
+       const opt = document.createElement('option');
+       opt.value = v.name;
+       opt.textContent = v.name;
+       select.appendChild(opt);
+    });
+    // Add "Other"
+    const otherOpt = document.createElement('option');
+    otherOpt.value = 'อื่นๆ ให้ระบุ';
+    otherOpt.textContent = 'อื่นๆ ให้ระบุ';
+    select.appendChild(otherOpt);
+
+    // 2. Populate Calendar Tab Cards
+    const calContainer = document.getElementById('calendarCardsContainer');
+    calContainer.innerHTML = '';
+
+    if (vehicles.length === 0) {
+      calContainer.innerHTML = '<div class="col-12 text-center text-muted py-5">No active vehicles available.</div>';
+    } else {
+      const colors = ['primary', 'info', 'success', 'warning', 'danger'];
+      vehicles.forEach((v, idx) => {
+         const color = colors[idx % colors.length];
+         // Only show if it has a calendar
+         if(!v.calendarId && !v.calendarUrl) return;
+
+         // Determine Link
+         let link = v.calendarUrl;
+         if (!link && v.calendarId) {
+            link = `https://calendar.google.com/calendar/u/0/embed?src=${v.calendarId}&ctz=Asia/Bangkok`;
+         }
+
+         // Use uploaded image or placeholder if missing
+         // To display Drive image, we need correct URL.
+         // Assuming v.image is FILE ID, we convert to view link.
+         // Or if it's already a full URL, use it.
+         let imgHtml = '';
+         if (v.image) {
+            const imgSrc = v.image.startsWith('http') ? v.image : `https://drive.google.com/uc?export=view&id=${v.image}`;
+            imgHtml = `<img src="${imgSrc}" class="card-img-top" style="height:160px; object-fit:cover;" alt="${escapeHtml(v.name)}">`;
+         }
+
+         const col = document.createElement('div');
+         col.className = 'col-md-6 col-lg-4';
+         col.innerHTML = `
+           <div class="card h-100 shadow-sm border-0 hover-lift">
+              ${imgHtml}
+              <div class="card-body text-center">
+                 <h5 class="card-title text-${color}">${escapeHtml(v.name)}</h5>
+                 <a href="${link}" target="_blank" class="btn btn-outline-${color} mt-3 rounded-pill w-100">
+                    <i class="fas fa-calendar-alt me-2"></i>${escapeHtml(v.buttonLabel || 'View Calendar')}
+                 </a>
+              </div>
+           </div>
+         `;
+         calContainer.appendChild(col);
+      });
+    }
+
+    // 3. Populate Filter Dropdown
+    const filterSelect = document.getElementById('carFilter');
+    filterSelect.innerHTML = '<option value="all">รถทั้งหมด</option>';
+    vehicles.forEach(v => {
+       const opt = document.createElement('option');
+       opt.value = v.name;
+       opt.textContent = v.name;
+       filterSelect.appendChild(opt);
+    });
+    const otherF = document.createElement('option');
+    otherF.value = 'อื่นๆ ให้ระบุ';
+    otherF.textContent = 'อื่นๆ ให้ระบุ';
+    filterSelect.appendChild(otherF);
   }
 
   function handleFormSubmit(e) {
@@ -259,8 +348,23 @@
         updateUIForAdmin();
         renderBookingsTable();
         Swal.fire('Logged in', `Welcome ${currentUser.name}`, 'success');
+
+        // Load admin tabs data if on admin tab
+        loadAdmins();
+        loadVehiclesAdmin();
       }
     });
+  }
+
+  function logoutAdmin() {
+    isAdmin = false;
+    currentUser = null;
+    adminAuth = null;
+    document.getElementById('adminTabLink').classList.add('d-none');
+    document.getElementById('adminLoginBtn').classList.remove('d-none');
+    // Switch to home
+    new bootstrap.Tab(document.querySelector('#nav-home-tab')).show();
+    renderBookingsTable();
   }
 
   function updateUIForAdmin() {
@@ -289,6 +393,240 @@
     return html;
   }
 
+  // --- Admin Dashboard Logic ---
+
+  function loadAdmins() {
+    if(!isAdmin) return;
+    google.script.run.withSuccessHandler(res => {
+      if(res.success) {
+        const tbody = document.getElementById('adminsTableBody');
+        tbody.innerHTML = '';
+        res.admins.forEach(a => {
+           // Display logic
+           const avatarUrl = a.avatar ? (a.avatar.startsWith('http') ? a.avatar : `https://drive.google.com/uc?export=view&id=${a.avatar}`) : 'https://via.placeholder.com/40';
+
+           const tr = document.createElement('tr');
+           tr.innerHTML = `
+             <td><img src="${avatarUrl}" class="rounded-circle border" width="40" height="40" style="object-fit:cover;"></td>
+             <td>${escapeHtml(a.username)}</td>
+             <td>${escapeHtml(a.fullName)}</td>
+             <td>${escapeHtml(a.email)}</td>
+             <td><span class="badge bg-secondary">${escapeHtml(a.role)}</span></td>
+             <td>${a.isActive ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-danger">Inactive</span>'}</td>
+             <td>
+               <button class="btn btn-sm btn-primary" onclick='openAdminModal(${JSON.stringify(JSON.stringify(a))})'><i class="fas fa-edit"></i></button>
+             </td>
+           `;
+           tbody.appendChild(tr);
+        });
+      }
+    }).getAllAdmins(adminAuth);
+  }
+
+  function openAdminModal(admin = null) {
+    const isEdit = !!admin;
+    admin = isEdit ? JSON.parse(admin) : {};
+
+    document.getElementById('adminModalTitle').innerText = isEdit ? 'Edit Admin' : 'Add New Admin';
+    document.getElementById('adminEditId').value = admin.id || '';
+    document.getElementById('adminUsername').value = admin.username || '';
+    document.getElementById('adminUsername').disabled = isEdit; // Prevent changing username on edit
+    document.getElementById('adminPassword').value = '';
+    document.getElementById('adminFullName').value = admin.fullName || '';
+    document.getElementById('adminEmail').value = admin.email || '';
+    document.getElementById('adminRole').value = admin.role || 'Admin';
+    document.getElementById('adminIsActive').checked = (admin.isActive !== false); // Default true
+
+    document.getElementById('adminAvatarId').value = admin.avatar || '';
+    const prevUrl = admin.avatar ? (admin.avatar.startsWith('http') ? admin.avatar : `https://drive.google.com/uc?export=view&id=${admin.avatar}`) : 'https://via.placeholder.com/100';
+    document.getElementById('adminPreviewImg').src = prevUrl;
+
+    new bootstrap.Modal(document.getElementById('adminModal')).show();
+  }
+
+  function submitAdminForm() {
+     const id = val('adminEditId');
+     const username = val('adminUsername');
+     const password = val('adminPassword');
+     const fullName = val('adminFullName');
+     const email = val('adminEmail');
+     const role = val('adminRole');
+     const isActive = document.getElementById('adminIsActive').checked;
+     const avatarId = val('adminAvatarId');
+
+     if(!username) { Swal.fire('Error', 'Username required', 'warning'); return; }
+
+     const data = { id, username, password, fullName, email, role, isActive, avatar: avatarId };
+
+     // Check if file upload is pending
+     const fileInput = document.getElementById('adminAvatarFile');
+     if(fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+        reader.onload = function(e) {
+           const base64 = e.target.result.split(',')[1];
+           showLoading(true);
+           google.script.run.withSuccessHandler(res => {
+              if(res.success) {
+                 data.avatar = res.fileId; // Use new file ID
+                 saveAdminData(data);
+              } else {
+                 showLoading(false);
+                 Swal.fire('Upload Failed', res.message, 'error');
+              }
+           }).uploadFile(base64, file.type, file.name);
+        };
+        reader.readAsDataURL(file);
+     } else {
+        showLoading(true);
+        saveAdminData(data);
+     }
+  }
+
+  function saveAdminData(data) {
+     google.script.run.withSuccessHandler(res => {
+        showLoading(false);
+        if(res.success) {
+           bootstrap.Modal.getInstance(document.getElementById('adminModal')).hide();
+           Swal.fire('Saved', res.message, 'success');
+           loadAdmins();
+        } else {
+           Swal.fire('Error', res.message, 'error');
+        }
+     }).saveAdmin(data, adminAuth);
+  }
+
+  function loadVehiclesAdmin() {
+    if(!isAdmin) return;
+    google.script.run.withSuccessHandler(res => {
+       if(res.success) {
+          const tbody = document.getElementById('vehiclesTableBody');
+          tbody.innerHTML = '';
+          res.vehicles.forEach(v => {
+             const imgUrl = v.image ? (v.image.startsWith('http') ? v.image : `https://drive.google.com/uc?export=view&id=${v.image}`) : 'https://via.placeholder.com/50';
+
+             const tr = document.createElement('tr');
+             tr.innerHTML = `
+               <td><img src="${imgUrl}" class="rounded border" width="60" height="40" style="object-fit:cover;"></td>
+               <td>${escapeHtml(v.name)}</td>
+               <td><small class="text-muted text-break" style="max-width:200px;display:block;">${escapeHtml(v.calendarId)}</small></td>
+               <td>${v.isActive ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>'}</td>
+               <td>
+                 <button class="btn btn-sm btn-primary" onclick='openVehicleModal(${JSON.stringify(JSON.stringify(v))})'><i class="fas fa-edit"></i></button>
+                 <button class="btn btn-sm btn-danger ms-1" onclick="deleteVehicle('${v.id}')"><i class="fas fa-trash"></i></button>
+               </td>
+             `;
+             tbody.appendChild(tr);
+          });
+       }
+    }).getAllVehicles(adminAuth);
+  }
+
+  function openVehicleModal(v = null) {
+     const isEdit = !!v;
+     v = isEdit ? JSON.parse(v) : {};
+
+     document.getElementById('vehicleModalTitle').innerText = isEdit ? 'Edit Vehicle' : 'Add Vehicle';
+     document.getElementById('vehicleEditId').value = v.id || '';
+     document.getElementById('vehicleName').value = v.name || '';
+     document.getElementById('vehicleCalId').value = v.calendarId || '';
+     document.getElementById('vehicleBtnLabel').value = v.buttonLabel || '';
+     document.getElementById('vehicleIsActive').checked = (v.isActive !== false);
+
+     document.getElementById('vehicleImageId').value = v.image || '';
+     const prevUrl = v.image ? (v.image.startsWith('http') ? v.image : `https://drive.google.com/uc?export=view&id=${v.image}`) : 'https://via.placeholder.com/150x100';
+     document.getElementById('vehiclePreviewImg').src = prevUrl;
+
+     new bootstrap.Modal(document.getElementById('vehicleModal')).show();
+  }
+
+  function submitVehicleForm() {
+     const id = val('vehicleEditId');
+     const name = val('vehicleName');
+     const calendarId = val('vehicleCalId');
+     const buttonLabel = val('vehicleBtnLabel');
+     const isActive = document.getElementById('vehicleIsActive').checked;
+     const imageId = val('vehicleImageId');
+
+     if(!name) { Swal.fire('Error', 'Display Name required', 'warning'); return; }
+
+     const data = { id, name, calendarId, buttonLabel, isActive, image: imageId };
+
+     const fileInput = document.getElementById('vehicleImageFile');
+     if(fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+        reader.onload = function(e) {
+           const base64 = e.target.result.split(',')[1];
+           showLoading(true);
+           google.script.run.withSuccessHandler(res => {
+              if(res.success) {
+                 data.image = res.fileId;
+                 saveVehicleData(data);
+              } else {
+                 showLoading(false);
+                 Swal.fire('Upload Failed', res.message, 'error');
+              }
+           }).uploadFile(base64, file.type, file.name);
+        };
+        reader.readAsDataURL(file);
+     } else {
+        showLoading(true);
+        saveVehicleData(data);
+     }
+  }
+
+  function saveVehicleData(data) {
+     google.script.run.withSuccessHandler(res => {
+        showLoading(false);
+        if(res.success) {
+           bootstrap.Modal.getInstance(document.getElementById('vehicleModal')).hide();
+           Swal.fire('Saved', 'Vehicle saved.', 'success');
+           loadVehiclesAdmin();
+           // Also refresh public view implicitly next time
+        } else {
+           Swal.fire('Error', res.message, 'error');
+        }
+     }).saveVehicle(data, adminAuth);
+  }
+
+  function deleteVehicle(id) {
+    Swal.fire({
+      title: 'Are you sure?',
+      text: "Delete this vehicle configuration?",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      confirmButtonText: 'Yes, delete it!'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        showLoading(true);
+        google.script.run.withSuccessHandler(res => {
+           showLoading(false);
+           if(res.success) {
+              Swal.fire('Deleted!', 'Vehicle has been deleted.', 'success');
+              loadVehiclesAdmin();
+           } else {
+              Swal.fire('Error', res.message, 'error');
+           }
+        }).deleteVehicle(id, adminAuth);
+      }
+    })
+  }
+
+  function previewFile(inputId, imgId) {
+     const input = document.getElementById(inputId);
+     const img = document.getElementById(imgId);
+     if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+           img.src = e.target.result;
+        }
+        reader.readAsDataURL(input.files[0]);
+     }
+  }
+
+  // --- Misc Helpers ---
   function editStatus(row, currentStatus) {
     Swal.fire({
       title: 'แก้ไขสถานะ',

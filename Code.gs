@@ -32,7 +32,7 @@ function getCheckLink_() {
 
 function preservePhone_(v){ const s=String(v||'').trim(); return s && /^\d+$/.test(s) ? "'" + s : s; }
 
-// ---------------- Admin & Vehicle Management ----------------
+// ---------------- Admin Management ----------------
 
 // Helper: Hash Password (SHA-256)
 function hashPassword_(raw) {
@@ -48,61 +48,51 @@ function hashPassword_(raw) {
   return hex;
 }
 
+function getAdminsSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(SHEET_ADMINS);
+  if (!sheet) {
+     sheet = ss.insertSheet(SHEET_ADMINS);
+     // 1.AdminId 2.Username 3.PasswordHash 4.FullName 5.Email 6.Role 7.AvatarFileId 8.IsActive 9.CreatedAt 10.UpdatedAt
+     sheet.appendRow([
+       'AdminId', 'Username', 'PasswordHash', 'FullName', 'Email', 'Role', 'AvatarFileId', 'IsActive', 'CreatedAt', 'UpdatedAt'
+     ]);
+     // Default admin
+     const now = new Date();
+     sheet.appendRow([
+       '1', 'admin', hashPassword_('1234'), 'System Admin', '', 'SuperAdmin', '', true, now, now
+     ]);
+  }
+  return sheet;
+}
+
 function adminLogin(username, password) {
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    let sheet = ss.getSheetByName(SHEET_ADMINS);
-    if (!sheet) {
-       // Auto-create Admins sheet if missing with 10-column strict structure
-       sheet = ss.insertSheet(SHEET_ADMINS);
-       // 1.AdminId 2.Username 3.PasswordHash 4.FullName 5.Email 6.Role 7.AvatarFileId 8.IsActive 9.CreatedAt 10.UpdatedAt
-       sheet.appendRow([
-         'AdminId', 'Username', 'PasswordHash', 'FullName', 'Email', 'Role', 'AvatarFileId', 'IsActive', 'CreatedAt', 'UpdatedAt'
-       ]);
-       // Default admin: admin / 1234 (hashed)
-       // SHA-256 for '1234' is '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4'
-       const now = new Date();
-       sheet.appendRow([
-         '1', 'admin', '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', 'System Admin', '', 'SuperAdmin', '', true, now, now
-       ]);
-    }
-
+    const sheet = getAdminsSheet_();
     const inputHash = hashPassword_(password);
     const data = sheet.getDataRange().getValues();
-    // Header is row 1 (index 0). Data starts at row 2 (index 1).
 
     for (let i = 1; i < data.length; i++) {
-      // Normalize inputs and stored data for robust comparison
-      const storedUser = String(data[i][1]).trim(); // Username is col 2 (index 1)
-      const storedPass = String(data[i][2]).trim(); // PasswordHash is col 3 (index 2)
-      const isActive   = data[i][7];         // IsActive is col 8 (index 7)
+      const storedUser = String(data[i][1]).trim();
+      const storedPass = String(data[i][2]).trim();
+      const isActive   = data[i][7];
 
       const inputUserNormal = String(username).trim();
 
-      // Compare Username (Case-Insensitive)
       if (storedUser.toLowerCase() === inputUserNormal.toLowerCase()) {
+        if (storedPass.toLowerCase() !== inputHash.toLowerCase()) return { success: false, message: 'Password incorrect.' };
 
-        // Check Password Hash (Case-Insensitive for safety against upper/lower hex)
-        if (storedPass.toLowerCase() !== inputHash.toLowerCase()) {
-           return { success: false, message: 'Password incorrect.' };
-        }
-
-        // Check IsActive
-        // Handles: boolean true, string "true" (case-insensitive), number 1
-        const isActiveBool = (isActive === true) ||
-                             (String(isActive).toLowerCase() === 'true') ||
-                             (isActive === 1);
-
+        const isActiveBool = (isActive === true) || (String(isActive).toLowerCase() === 'true') || (isActive === 1);
         if (isActiveBool) {
            return {
              success: true,
              user: {
-               id: data[i][0], // AdminId
+               id: data[i][0],
                username: storedUser,
-               name: data[i][3], // FullName
-               email: data[i][4], // Email
-               role: data[i][5], // Role
-               image: data[i][6] // AvatarFileId
+               name: data[i][3],
+               email: data[i][4],
+               role: data[i][5],
+               image: data[i][6]
              }
            };
         } else {
@@ -116,124 +106,192 @@ function adminLogin(username, password) {
   }
 }
 
-// Security Check Helper
 function isAuthenticated_(auth) {
   if (!auth || !auth.username || !auth.password) return false;
-  // Note: auth.password from client is raw (from prompt), so we re-verify via adminLogin
   const res = adminLogin(auth.username, auth.password);
   return res.success;
 }
 
-function updateAdminProfile(username, newData, auth) {
-  if (!isAuthenticated_(auth)) return { success: false, message: 'Unauthorized: Invalid credentials.' };
-
+// Get all admins for management list
+function getAllAdmins(auth) {
+  if (!isAuthenticated_(auth)) return { success: false, message: 'Unauthorized' };
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(SHEET_ADMINS);
+    const sheet = getAdminsSheet_();
     const data = sheet.getDataRange().getValues();
-    const now = new Date();
-
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][1]).trim().toLowerCase() === String(username).trim().toLowerCase()) { // Username is index 1
-        // Update FullName (Index 3 / Col 4)
-        if (newData.name) sheet.getRange(i + 1, 4).setValue(newData.name);
-
-        // Update AvatarFileId (Index 6 / Col 7) - frontend sends 'image' key
-        if (newData.image) sheet.getRange(i + 1, 7).setValue(newData.image);
-
-        // Update Password (Index 2 / Col 3) if provided -> Hash it first
-        if (newData.password) {
-           const newHash = hashPassword_(newData.password);
-           sheet.getRange(i + 1, 3).setValue(newHash);
-        }
-
-        // Update UpdatedAt (Index 9 / Col 10)
-        sheet.getRange(i + 1, 10).setValue(now);
-
-        // Fetch updated values
-        return {
-          success: true,
-          data: {
-            name: newData.name || data[i][3],
-            image: newData.image || data[i][6]
-          }
-        };
-      }
+    const admins = [];
+    for(let i=1; i<data.length; i++){
+      admins.push({
+        id: data[i][0],
+        username: data[i][1],
+        fullName: data[i][3],
+        email: data[i][4],
+        role: data[i][5],
+        avatar: data[i][6],
+        isActive: data[i][7],
+        updatedAt: data[i][9]
+      });
     }
-    return { success: false, message: 'User not found' };
-  } catch (e) { return { success: false, message: e.message }; }
+    return { success: true, admins };
+  } catch(e) { return { success: false, message: e.message }; }
 }
 
-function getVehicles() {
+// Create or Update Admin
+function saveAdmin(data, auth) {
+  if (!isAuthenticated_(auth)) return { success: false, message: 'Unauthorized' };
+  // Only SuperAdmin or Self can edit.
+  // Simplified: Authenticated admins can edit (frontend restricts UI).
+
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    let sheet = ss.getSheetByName(SHEET_VEHICLES);
-    if (!sheet) {
-       sheet = ss.insertSheet(SHEET_VEHICLES);
-       sheet.appendRow(['Namecar', 'Calendar ID', 'Url Calendar', 'Car Image']);
+    const sheet = getAdminsSheet_();
+    const rows = sheet.getDataRange().getValues();
+    const now = new Date();
+
+    // If ID exists, UPDATE
+    if (data.id) {
+      for(let i=1; i<rows.length; i++) {
+        if(String(rows[i][0]) === String(data.id)) {
+          // Update fields
+          const range = sheet.getRange(i+1, 1, 1, 10);
+          const row = rows[i];
+
+          if(data.password) row[2] = hashPassword_(data.password); // Hash new password
+          if(data.fullName) row[3] = data.fullName;
+          if(data.email !== undefined) row[4] = data.email;
+          if(data.role) row[5] = data.role;
+          if(data.avatar) row[6] = data.avatar;
+          if(data.isActive !== undefined) row[7] = data.isActive;
+          row[9] = now; // UpdatedAt
+
+          range.setValues([row]);
+          return { success: true, message: 'Admin updated' };
+        }
+      }
+      return { success: false, message: 'Admin ID not found' };
     }
 
+    // Create NEW
+    // Check username duplicate
+    for(let i=1; i<rows.length; i++) {
+      if(String(rows[i][1]).toLowerCase() === String(data.username).toLowerCase()) {
+        return { success: false, message: 'Username already exists' };
+      }
+    }
+
+    const newId = new Date().getTime().toString(); // Simple ID
+    const passHash = hashPassword_(data.password || '1234'); // Default or provided
+    sheet.appendRow([
+      newId,
+      data.username,
+      passHash,
+      data.fullName || '',
+      data.email || '',
+      data.role || 'Admin',
+      data.avatar || '',
+      true, // Active by default
+      now,
+      now
+    ]);
+    return { success: true, message: 'Admin created' };
+
+  } catch(e) { return { success: false, message: e.message }; }
+}
+
+
+// ---------------- Vehicle Management ----------------
+
+function getVehiclesSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(SHEET_VEHICLES);
+  if (!sheet) {
+     sheet = ss.insertSheet(SHEET_VEHICLES);
+     // 1.ItemId 2.DisplayName 3.ImageFileId 4.CalendarId 5.ButtonLabel 6.IsActive 7.CreatedAt 8.UpdatedAt
+     sheet.appendRow(['ItemId', 'DisplayName', 'ImageFileId', 'CalendarId', 'ButtonLabel', 'IsActive', 'CreatedAt', 'UpdatedAt']);
+  }
+  return sheet;
+}
+
+function getAllVehicles(auth) {
+  // If auth is present, return all. If not (public), return only active?
+  // Actually usually separate functions are better, or just filter in frontend.
+  // But strictly: Public shouldn't see disabled.
+  const isAdmin = auth && auth.username;
+
+  try {
+    const sheet = getVehiclesSheet_();
     const data = sheet.getDataRange().getValues();
     const vehicles = [];
     for (let i = 1; i < data.length; i++) {
-      if (data[i][0]) {
-        vehicles.push({
-          name: data[i][0],
-          calendarId: data[i][1],
-          calendarUrl: data[i][2],
-          image: data[i][3]
-        });
-      }
+      const isActive = (data[i][5] === true || String(data[i][5]).toLowerCase() === 'true' || data[i][5] === 1);
+      if (!isAdmin && !isActive) continue; // Hide inactive from public
+
+      vehicles.push({
+        id: data[i][0],
+        name: data[i][1],
+        image: data[i][2],
+        calendarId: data[i][3],
+        buttonLabel: data[i][4],
+        isActive: isActive,
+        updatedAt: data[i][7]
+      });
     }
-    return vehicles;
-  } catch (e) { return []; }
+    return { success: true, vehicles };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+// Public wrapper for frontend
+function getPublicVehicles() {
+  return getAllVehicles(null); // No auth -> only active
 }
 
 function saveVehicle(data, auth) {
-  if (!isAuthenticated_(auth)) return { success: false, message: 'Unauthorized: Invalid credentials.' };
+  if (!isAuthenticated_(auth)) return { success: false, message: 'Unauthorized' };
 
   try {
-    // data: { oldName, name, calendarId, calendarUrl, image }
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(SHEET_VEHICLES);
+    const sheet = getVehiclesSheet_();
     const rows = sheet.getDataRange().getValues();
+    const now = new Date();
 
-    // If oldName is provided, we are in EDIT mode
-    if (data.oldName) {
+    // EDIT
+    if (data.id) {
        for (let i = 1; i < rows.length; i++) {
-          if (rows[i][0] === data.oldName) {
-             sheet.getRange(i + 1, 1).setValue(data.name);
-             sheet.getRange(i + 1, 2).setValue(data.calendarId);
-             sheet.getRange(i + 1, 3).setValue(data.calendarUrl);
-             sheet.getRange(i + 1, 4).setValue(data.image);
+          if (String(rows[i][0]) === String(data.id)) {
+             const row = rows[i];
+             if(data.name) row[1] = data.name;
+             if(data.image) row[2] = data.image;
+             if(data.calendarId) row[3] = data.calendarId;
+             if(data.buttonLabel) row[4] = data.buttonLabel;
+             if(data.isActive !== undefined) row[5] = data.isActive;
+             row[7] = now;
+             sheet.getRange(i+1, 1, 1, 8).setValues([row]);
              return { success: true };
           }
        }
-       return { success: false, message: 'Vehicle not found to update.' };
+       return { success: false, message: 'Vehicle not found.' };
     }
 
-    // ADD mode: Check duplicate name
-    for (let i = 1; i < rows.length; i++) {
-       if (rows[i][0] === data.name) {
-          return { success: false, message: 'Vehicle name already exists.' };
-       }
-    }
-
-    sheet.appendRow([data.name, data.calendarId, data.calendarUrl, data.image]);
+    // ADD
+    const newId = 'V' + new Date().getTime();
+    sheet.appendRow([
+      newId,
+      data.name,
+      data.image || '',
+      data.calendarId || '',
+      data.buttonLabel || 'View Calendar',
+      true, // Active
+      now,
+      now
+    ]);
     return { success: true };
   } catch (e) { return { success: false, message: e.message }; }
 }
 
-function deleteVehicle(name, auth) {
-  if (!isAuthenticated_(auth)) return { success: false, message: 'Unauthorized: Invalid credentials.' };
-
+function deleteVehicle(id, auth) {
+  if (!isAuthenticated_(auth)) return { success: false, message: 'Unauthorized' };
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(SHEET_VEHICLES);
+    const sheet = getVehiclesSheet_();
     const rows = sheet.getDataRange().getValues();
-
     for(let i=1; i<rows.length; i++) {
-       if(rows[i][0] === name) {
+       if(String(rows[i][0]) === String(id)) {
           sheet.deleteRow(i+1);
           return { success: true };
        }
@@ -243,16 +301,20 @@ function deleteVehicle(name, auth) {
 }
 
 // Helper to get Cal ID map dynamically
-function getCalendarMap_() {
-  const vs = getVehicles();
+function getVehicleMap_() {
+  // Return { "CarName": "CalID" }
+  const res = getAllVehicles({username:'system'}); // Get all even if inactive, for admin safety/lookup
+  if (!res.success) return {};
   const map = {};
-  vs.forEach(v => map[v.name] = v.calendarId);
+  res.vehicles.forEach(v => {
+    if (v.name) map[v.name] = v.calendarId;
+  });
   return map;
 }
 
-function uploadImage(data, mimeType, filename) {
+function uploadFile(data, mimeType, filename) {
   try {
-    const folderName = "VehicleSys_Images";
+    const folderName = "VehicleSys_Assets";
     const folders = DriveApp.getFoldersByName(folderName);
     let folder;
     if (folders.hasNext()) {
@@ -265,7 +327,7 @@ function uploadImage(data, mimeType, filename) {
     const file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
-    return { success: true, url: `https://drive.google.com/uc?export=view&id=${file.getId()}` };
+    return { success: true, fileId: file.getId(), url: `https://drive.google.com/uc?export=view&id=${file.getId()}` };
   } catch (e) {
     return { success: false, message: e.message };
   }
@@ -278,6 +340,13 @@ function submitBooking(formData) {
     const data = sanitizeForm_(formData);
     const validationError = validateForm_(data);
     if (validationError) return { success: false, message: validationError };
+
+    // Verify car name exists in Active Vehicles
+    const publicVehicles = getPublicVehicles();
+    if (data.car !== 'อื่นๆ ให้ระบุ') {
+       const isValid = publicVehicles.success && publicVehicles.vehicles.some(v => v.name === data.car);
+       if (!isValid) return { success: false, message: 'รถที่เลือกไม่ถูกต้องหรือถูกปิดการใช้งานแล้ว' };
+    }
 
     if (hasPendingOverlap_(sheet, data)) return { success: false, message: 'เวลาซ้ำกับคำขอค้างอยู่ กรุณาเลือกเวลาใหม่' };
     if (hasCalendarOverlap_(data)) return { success: false, message: 'เวลาซ้ำกับปฏิทิน กรุณาเลือกเวลาใหม่' };
@@ -296,8 +365,8 @@ function submitBooking(formData) {
       data.originPlace, data.originAddress, oContact, data.originReason, data.originMap,
       data.dest1Place, data.dest1Address, d1Contact, data.dest1Reason, data.dest1Map,
       data.dest2Place, data.dest2Address, d2Contact, data.dest2Reason, data.dest2Map,
-    data.extraDetails, 'Pending', '', '', data.email, '', '', data.returnDate, data.returnTime,
-    data.driveOption, data.hasLicense, data.driverName
+      data.extraDetails, 'Pending', '', '', data.email, '', '', data.returnDate, data.returnTime,
+      data.driveOption, data.hasLicense, data.driverName
     ]);
 
     try { notifyAdmins_(data, now); } catch (e) { console.error('Notify admin failed:', e); }
@@ -336,8 +405,8 @@ function getBookings() {
         extraDetails: r[24] || '', status: r[25] || 'Pending',
         approver: r[26] || '', approvedAt: r[27] ? Utilities.formatDate(new Date(r[27]), tz, 'yyyy-MM-dd HH:mm') : '',
         requesterEmail: r[28] || '', rejectionReason: r[29] || '', eventId: r[30] || '',
-      returnDate: normalizeDate_(r[31], tz), returnTime: normalizeTime_(r[32]),
-      driveOption: r[33] || '', hasLicense: r[34] || false, driverName: r[35] || ''
+        returnDate: normalizeDate_(r[31], tz), returnTime: normalizeTime_(r[32]),
+        driveOption: r[33] || '', hasLicense: r[34] || false, driverName: r[35] || ''
       };
     }).reverse();
 
@@ -399,7 +468,6 @@ function generateSummaryPdf(startStr, endStr) {
   }
 }
 
-// HTML สำหรับ Summary PDF (ฟอนต์ Kanit)
 function buildSummaryPdfHtml_(s){
   const colors = ['#1e4fd7','#0ea5e9','#10b981','#ff8c42','#8b5cf6','#ef4444','#14b8a6','#f59e0b','#22c55e'];
   const donutCar = buildDonutSvg_(s.byCar || {}, colors);
@@ -425,7 +493,6 @@ function buildSummaryPdfHtml_(s){
   </body></html>`;
 }
 
-// วาดโดนัทแบบ wedge เดียวต่อหมวด (ปิดวงสนิท) สำหรับ PDF
 function buildDonutSvg_(obj, colors){
   const entries = Object.entries(obj||{});
   const total = entries.reduce((s,[,v])=>s+v,0);
@@ -442,7 +509,7 @@ function buildDonutSvg_(obj, colors){
     const frac = value/total;
     let angle = frac * 2*Math.PI;
     if (idx === entries.length-1) {
-      angle = 2*Math.PI - (current + Math.PI/2); // ชิ้นสุดท้ายปิดวงตรงเป๊ะ
+      angle = 2*Math.PI - (current + Math.PI/2);
     }
     const start = current;
     const end = current + angle;
@@ -486,12 +553,9 @@ function buildDonutSvg_(obj, colors){
 // ---------------- Update status ----------------
 function updateBookingStatus(rowNumber, newStatus, reason, adminUser, auth) {
   try {
-    // If auth is provided, verify it.
     if (!isAuthenticated_(auth)) {
        return { success: false, message: 'Unauthorized: Invalid credentials.' };
     }
-
-    // adminUser object might just be for display, use auth for verification
     const adminName = (adminUser && adminUser.name) ? adminUser.name : (auth.username || 'Admin');
 
     if (!['Approved', 'Rejected'].includes(newStatus)) return { success: false, message: 'Invalid status.' };
@@ -513,7 +577,7 @@ function updateBookingStatus(rowNumber, newStatus, reason, adminUser, auth) {
         if (hasCalendarOverlap_(booking)) return { success: false, message: 'เวลาซ้ำกับปฏิทิน กรุณาเลือกเวลาใหม่' };
 
         // Dynamic Calendar Lookup
-        const calMap = getCalendarMap_();
+        const calMap = getVehicleMap_();
         const calId = calMap[booking.car];
 
         if (!calId) return { success: false, message: `ยังไม่ได้ตั้งค่า Calendar ID สำหรับรถ ${booking.car}` };
@@ -525,7 +589,6 @@ function updateBookingStatus(rowNumber, newStatus, reason, adminUser, auth) {
         const ev = calendar.createEvent(title, start, end, { description, location: booking.dest1Place || booking.originPlace || '' });
         const eventId = ev.getId();
         const approvedAt = new Date();
-        // Use adminName
         sheet.getRange(rowNumber, 26, 1, 6).setValues([['Approved', adminName, approvedAt, row[28], '', eventId]]);
       } else {
         const approvedAt = new Date();
@@ -557,11 +620,10 @@ function updateBookingStatus(rowNumber, newStatus, reason, adminUser, auth) {
   }
 }
 
-
 // ---------------- Calendar fetch/remove ----------------
 function getCalendarBookings(car, startDateStr, endDateStr) {
   try {
-    const calMap = getCalendarMap_();
+    const calMap = getVehicleMap_();
     const calId = calMap[car];
     if (!calId) return { success: false, events: [], message: `ยังไม่ได้ตั้งค่า Calendar ID สำหรับรถ ${car}` };
     const calendar = CalendarApp.getCalendarById(calId);
@@ -585,7 +647,7 @@ function getCalendarBookings(car, startDateStr, endDateStr) {
 }
 
 function removeEventForBooking_(booking) {
-  const calMap = getCalendarMap_();
+  const calMap = getVehicleMap_();
   const calId = calMap[booking.car];
   if (!calId) return;
   const cal = CalendarApp.getCalendarById(calId);
@@ -654,10 +716,7 @@ function rowToBooking_(r){
     requesterEmail: r[28] || '', rejectionReason: r[29] || '', eventId: r[30] || '',
     returnDate: normalizeDate_(r[31], Session.getScriptTimeZone()),
     returnTime: normalizeTime_(r[32]),
-    // Map new fields safely (indices 33, 34, 35 correspond to columns 34, 35, 36)
-    driveOption: r[33] || '',
-    hasLicense: r[34] || false,
-    driverName: r[35] || ''
+    driveOption: r[33] || '', hasLicense: r[34] || false, driverName: r[35] || ''
   };
 }
 
@@ -755,7 +814,8 @@ function hasPendingOverlap_(sheet, data) {
 
 function hasCalendarOverlap_(data) {
   if (data.car === 'อื่นๆ ให้ระบุ') return false;
-  const calId = CALENDAR_BY_CAR[data.car];
+  const calMap = getVehicleMap_();
+  const calId = calMap[data.car];
   if (!calId) return false;
   const calendar = CalendarApp.getCalendarById(calId);
   if (!calendar) return false;

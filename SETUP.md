@@ -1,38 +1,38 @@
-# คู่มือการติดตั้งและอัปเดตระบบ (Setup & Update Guide) v3
+# คู่มือการติดตั้งและอัปเดตระบบ (Setup & Update Guide) v4 (Full Admin System)
 
-เนื่องจากมีการอัปเกรดระบบเพิ่มเติม (Vehicle CRUD) **จำเป็นต้องเพิ่ม Sheet ใหม่ 2 แผ่น (หรือเปลี่ยนชื่อแผ่นเดิม)** ใน Google Spreadsheet เดิมของคุณครับ
+เนื่องจากมีการอัปเกรดระบบครั้งใหญ่เพื่อรองรับการจัดการ Admin และ รถยนต์ผ่านหน้าเว็บได้โดยตรง **ระบบจะต้องการโครงสร้าง Sheet ใหม่** ดังนี้ครับ
+
+**ข้อแนะนำ:** วิธีที่ง่ายที่สุดคือ **ลบ Sheet `Admins` และ `Calendar Vehicles` เดิมทิ้ง (ถ้ามี)** แล้วรันระบบ 1 ครั้ง ระบบจะสร้าง Sheet และโครงสร้างคอลัมน์ที่ถูกต้องให้โดยอัตโนมัติครับ
+
+แต่หากต้องการสร้างเองด้วยมือ ให้ทำตามโครงสร้างนี้ครับ:
 
 ## 1. การเปลี่ยนแปลงใน Google Sheets (Database)
-กรุณาเปิดไฟล์ Google Sheet เดิมแล้วกด **+ (เพิ่มแผ่นงาน)** เพื่อสร้าง Sheet ใหม่ และตั้งชื่อให้ตรงเป๊ะดังนี้:
 
 ### 1.1 Sheet ชื่อ: `Admins`
-ใช้สำหรับเก็บข้อมูลผู้ดูแลระบบ (Username/Password)
-*   **แถวที่ 1 (Header):** `Username`, `Password`, `Name`, `ProfileImage`
-*   **ข้อมูลตัวอย่าง (แถวที่ 2):**
-    *   Username: `admin`
-    *   Password: `1234`
-    *   Name: `Admin IT`
-    *   ProfileImage: `https://via.placeholder.com/150` (ใส่ลิงก์รูปภาพ หรือเว้นว่างได้)
+ใช้สำหรับเก็บข้อมูลผู้ดูแลระบบ และการล็อกอิน
+*   **จำนวนคอลัมน์:** 10 คอลัมน์
+*   **แถวที่ 1 (Header):**
+    `AdminId`, `Username`, `PasswordHash`, `FullName`, `Email`, `Role`, `AvatarFileId`, `IsActive`, `CreatedAt`, `UpdatedAt`
 
 ### 1.2 Sheet ชื่อ: `Calendar Vehicles`
-**(สำคัญ: เปลี่ยนจากเดิมที่ใช้ชื่อ `Vehicles`)**
-ใช้สำหรับเก็บข้อมูลรถและปฏิทิน รวมถึงลิงก์ปุ่มดูปฏิทิน
-*   **แถวที่ 1 (Header):** `Namecar`, `Calendar ID`, `Url Calendar`, `Car Image`
-*   **คำอธิบายคอลัมน์:**
-    *   `Namecar`: ชื่อรถ (เช่น [รถ 6 ล้อ][ISUZU]...)
-    *   `Calendar ID`: ID ของ Google Calendar สำหรับรถคันนั้น
-    *   `Url Calendar`: ลิงก์สำหรับให้พนักงานกดดูปฏิทิน (เช่น https://calendar.google.com/...)
-    *   `Car Image`: ลิงก์รูปภาพรถ หรือ ID ของไฟล์ใน Drive (ระบบจัดการให้อัตโนมัติเมื่ออัปโหลด)
+ใช้สำหรับเก็บข้อมูลรถ ปฏิทิน รูปภาพ และสถานะการเปิด/ปิดใช้งาน
+*   **จำนวนคอลัมน์:** 8 คอลัมน์
+*   **แถวที่ 1 (Header):**
+    `ItemId`, `DisplayName`, `ImageFileId`, `CalendarId`, `ButtonLabel`, `IsActive`, `CreatedAt`, `UpdatedAt`
 
 ### 1.3 Sheet ชื่อ: `Bookings` (อันเดิม)
-*   ไม่ต้องลบหรือแก้ไขคอลัมน์ใดๆ ข้อมูลเก่าใช้ต่อได้เลย
+ใช้เก็บข้อมูลการจอง
+*   **เพิ่มเติม:** ระบบจะเพิ่มคอลัมน์ใหม่ต่อท้ายโดยอัตโนมัติ (DriveOption, HasLicense, DriverName) ไม่ต้องลบข้อมูลเก่าครับ
 
 ---
 
-## 2. การตั้งค่าใน Code (Configuration)
-ในไฟล์ `Code.gs` เวอร์ชันใหม่ ระบบจะอ่านข้อมูลจาก Sheet `Admins` และ `Calendar Vehicles` โดยอัตโนมัติ
+## 2. การตั้งค่าโฟลเดอร์รูปภาพ (Google Drive)
+ระบบจะทำการสร้างโฟลเดอร์ชื่อ `VehicleSys_Assets` ใน Google Drive ของเจ้าของ Script ให้โดยอัตโนมัติ เมื่อมีการอัปโหลดรูปภาพครั้งแรก
 
 ## 3. วิธีการนำไปใช้งาน (Deployment)
-1.  นำไฟล์โค้ดทั้ง 4 ไฟล์ (`Code.gs`, `index.html`, `css.html`, `js.html`) ไปอัปเดตใน Apps Script Editor
-2.  กด **Deploy** > **New Deployment** > **Deploy**
-3.  นำ URL Web App ไปใช้งานได้เลยครับ
+1.  นำไฟล์โค้ดทั้งหมด (`Code.gs`, `index.html`, `css.html`, `js.html`, `admin_dashboard.html`) ไปอัปเดตใน Apps Script Editor
+2.  ตรวจสอบว่าได้เพิ่มไฟล์ `admin_dashboard.html` เข้าไปในโปรเจกต์แล้ว
+3.  กด **Deploy** > **New Deployment** > **Deploy**
+4.  **Admin Login เริ่มต้น:**
+    *   Username: `admin`
+    *   Password: `1234`
