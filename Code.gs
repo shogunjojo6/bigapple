@@ -14,15 +14,23 @@ const SHEET_VEHICLES = 'Calendar Vehicles';
 
 // ---------------- Web App Serving ----------------
 function doGet() {
-  const template = HtmlService.createTemplateFromFile('index');
-  return template.evaluate()
-      .setTitle('Vehicle Booking System')
-      .setSandboxMode(HtmlService.SandboxMode.IFRAME)
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  try {
+    const template = HtmlService.createTemplateFromFile('index');
+    return template.evaluate()
+        .setTitle('Vehicle Booking System')
+        .setSandboxMode(HtmlService.SandboxMode.IFRAME)
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  } catch (e) {
+    return ContentService.createTextOutput("System Error: " + e.message);
+  }
 }
 
 function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+  try {
+    return HtmlService.createHtmlOutputFromFile(filename).getContent();
+  } catch (e) {
+    return "<script>console.error('Error loading " + filename + ": " + e.message + "'); alert('Error loading component: " + filename + "');</script>";
+  }
 }
 
 function getCheckLink_() {
@@ -49,7 +57,14 @@ function hashPassword_(raw) {
 }
 
 function getAdminsSheet_() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  // Defensive sheet opening
+  let ss;
+  try {
+    ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  } catch(e) {
+    throw new Error("Cannot open Spreadsheet. Please check ID and Permissions.");
+  }
+
   let sheet = ss.getSheetByName(SHEET_ADMINS);
   if (!sheet) {
      sheet = ss.insertSheet(SHEET_ADMINS);
@@ -138,9 +153,6 @@ function getAllAdmins(auth) {
 // Create or Update Admin
 function saveAdmin(data, auth) {
   if (!isAuthenticated_(auth)) return { success: false, message: 'Unauthorized' };
-  // Only SuperAdmin or Self can edit.
-  // Simplified: Authenticated admins can edit (frontend restricts UI).
-
   try {
     const sheet = getAdminsSheet_();
     const rows = sheet.getDataRange().getValues();
@@ -200,7 +212,13 @@ function saveAdmin(data, auth) {
 // ---------------- Vehicle Management ----------------
 
 function getVehiclesSheet_() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let ss;
+  try {
+    ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  } catch(e) {
+    throw new Error("Cannot open Spreadsheet: " + e.message);
+  }
+
   let sheet = ss.getSheetByName(SHEET_VEHICLES);
   if (!sheet) {
      sheet = ss.insertSheet(SHEET_VEHICLES);
@@ -211,9 +229,6 @@ function getVehiclesSheet_() {
 }
 
 function getAllVehicles(auth) {
-  // If auth is present, return all. If not (public), return only active?
-  // Actually usually separate functions are better, or just filter in frontend.
-  // But strictly: Public shouldn't see disabled.
   const isAdmin = auth && auth.username;
 
   try {
@@ -221,7 +236,10 @@ function getAllVehicles(auth) {
     const data = sheet.getDataRange().getValues();
     const vehicles = [];
     for (let i = 1; i < data.length; i++) {
-      const isActive = (data[i][5] === true || String(data[i][5]).toLowerCase() === 'true' || data[i][5] === 1);
+      // Robust Active Check
+      const val = data[i][5];
+      const isActive = (val === true || String(val).toLowerCase() === 'true' || val === 1);
+
       if (!isAdmin && !isActive) continue; // Hide inactive from public
 
       vehicles.push({
@@ -235,7 +253,9 @@ function getAllVehicles(auth) {
       });
     }
     return { success: true, vehicles };
-  } catch (e) { return { success: false, message: e.message }; }
+  } catch (e) {
+    return { success: false, message: "DB Error: " + e.message };
+  }
 }
 
 // Public wrapper for frontend
