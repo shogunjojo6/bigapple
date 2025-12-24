@@ -504,7 +504,7 @@
     document.getElementById('adminModalTitle').innerText = isEdit ? 'Edit Admin' : 'Add New Admin';
     document.getElementById('adminEditId').value = admin.id || '';
     document.getElementById('adminUsername').value = admin.username || '';
-    document.getElementById('adminUsername').disabled = isEdit;
+    // document.getElementById('adminUsername').disabled = isEdit; // User requested ability to change username
     document.getElementById('adminPassword').value = '';
     document.getElementById('adminFullName').value = admin.fullName || '';
     document.getElementById('adminEmail').value = admin.email || '';

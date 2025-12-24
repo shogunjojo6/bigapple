@@ -160,11 +160,27 @@ function saveAdmin(data, auth) {
 
     // If ID exists, UPDATE
     if (data.id) {
+      // Check for username uniqueness first if username is being changed
+      if (data.username) {
+        const newUsername = String(data.username).trim().toLowerCase();
+        for (let j = 1; j < rows.length; j++) {
+          const rowId = String(rows[j][0]);
+          const rowUser = String(rows[j][1]).trim().toLowerCase();
+          // If username matches BUT it's not the same ID -> Duplicate!
+          if (rowUser === newUsername && rowId !== String(data.id)) {
+            return { success: false, message: 'Username already taken.' };
+          }
+        }
+      }
+
       for(let i=1; i<rows.length; i++) {
         if(String(rows[i][0]) === String(data.id)) {
           // Update fields
           const range = sheet.getRange(i+1, 1, 1, 10);
           const row = rows[i];
+
+          // Update Username if provided
+          if(data.username) row[1] = data.username.trim();
 
           if(data.password) row[2] = hashPassword_(data.password); // Hash new password
           if(data.fullName) row[3] = data.fullName;
