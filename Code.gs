@@ -1,3 +1,12 @@
+const GOOGLE_SHEET_ID = "";
+
+function getSpreadsheet() {
+  if (GOOGLE_SHEET_ID) {
+    return SpreadsheetApp.openById(GOOGLE_SHEET_ID);
+  }
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
 function doGet(e) {
   setupDatabase();
   return HtmlService.createTemplateFromFile('index')
@@ -12,7 +21,7 @@ function include(filename) {
 }
 
 function setupDatabase() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const sheets = [
     { name: 'ADMIN', headers: ['admin_id', 'username', 'password'] },
     { name: 'MEMBER', headers: ['member_id', 'name', 'address', 'phone', 'email', 'password', 'registration_date', 'member_type'] },
@@ -30,7 +39,7 @@ function setupDatabase() {
 }
 
 function readData(sheetName) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const sheet = ss.getSheetByName(sheetName);
   if (!sheet) return [];
   const data = sheet.getDataRange().getDisplayValues();
@@ -45,7 +54,7 @@ function readData(sheetName) {
 }
 
 function createData(sheetName, data) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const sheet = ss.getSheetByName(sheetName);
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const row = headers.map(header => data[header] || '');
@@ -54,7 +63,7 @@ function createData(sheetName, data) {
 }
 
 function updateData(sheetName, idColumn, idValue, data) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const sheet = ss.getSheetByName(sheetName);
   const values = sheet.getDataRange().getValues();
   const headers = values[0];
@@ -73,7 +82,7 @@ function updateData(sheetName, idColumn, idValue, data) {
 }
 
 function deleteData(sheetName, idColumn, idValue) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const sheet = ss.getSheetByName(sheetName);
   const values = sheet.getDataRange().getValues();
   const headers = values[0];
@@ -102,7 +111,7 @@ function searchData(sheetName, query) {
 }
 
 function borrowBook(memberId, bookId) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const bookSheet = ss.getSheetByName('BOOK');
   const bookData = bookSheet.getDataRange().getValues();
   const bookHeaders = bookData[0];
@@ -144,7 +153,7 @@ function borrowBook(memberId, bookId) {
 }
 
 function returnBook(borrowId) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   const borrowSheet = ss.getSheetByName('BORROW');
   const borrowData = borrowSheet.getDataRange().getValues();
   const borrowHeaders = borrowData[0];
@@ -186,7 +195,7 @@ function returnBook(borrowId) {
 }
 
 function getStats() {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const books = ss.getSheetByName('BOOK') ? ss.getSheetByName('BOOK').getLastRow() - 1 : 0;
     const members = ss.getSheetByName('MEMBER') ? ss.getSheetByName('MEMBER').getLastRow() - 1 : 0;
     const borrows = ss.getSheetByName('BORROW') ? ss.getSheetByName('BORROW').getLastRow() - 1 : 0;
