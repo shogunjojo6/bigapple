@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('css'); ?>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">Library System</div>
+  <div class="nav-links">
+    <div class="nav-item active" onclick="showPage('dashboard')">Dashboard</div>
+    <div class="nav-item" onclick="showPage('books')">Books</div>
+    <div class="nav-item" onclick="showPage('staff')">Staff</div>
+    <div class="nav-item" onclick="showPage('teachers')">Teachers</div>
+    <div class="nav-item" onclick="showPage('students')">Students</div>
+    <div class="nav-item" onclick="showPage('borrow-return')">Borrow/Return</div>
+  </div>
+</nav>
+
+<div class="container">
+
+  <div id="dashboard" class="page active">
+    <div class="header-actions">
+      <h2>Dashboard</h2>
+    </div>
+    <div class="grid">
+      <div class="stat-card">
+        <span class="stat-value" id="stat-books">0</span>
+        <span class="stat-label">Total Books</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="stat-members">0</span>
+        <span class="stat-label">Total Members</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="stat-borrows">0</span>
+        <span class="stat-label">Active Borrows</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="books" class="page">
+    <div class="header-actions">
+      <h2>Books Management</h2>
+      <button class="btn btn-primary" onclick="openModal('BOOK', 'add')">Add New Book</button>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="search-book" placeholder="Search books...">
+      <button class="btn btn-secondary" onclick="search('BOOK')">Search</button>
+    </div>
+    <div id="table-book"></div>
+  </div>
+
+  <div id="staff" class="page">
+    <div class="header-actions">
+      <h2>Staff Management</h2>
+      <button class="btn btn-primary" onclick="openModal('ADMIN', 'add')">Add New Staff</button>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="search-admin" placeholder="Search staff...">
+      <button class="btn btn-secondary" onclick="search('ADMIN')">Search</button>
+    </div>
+    <div id="table-admin"></div>
+  </div>
+
+  <div id="teachers" class="page">
+    <div class="header-actions">
+      <h2>Teacher Management</h2>
+      <button class="btn btn-primary" onclick="openModal('MEMBER', 'add', null, 'teacher')">Add New Teacher</button>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="search-teachers" placeholder="Search teachers...">
+      <button class="btn btn-secondary" onclick="search('MEMBER', 'teacher')">Search</button>
+    </div>
+    <div id="table-teachers"></div>
+  </div>
+
+  <div id="students" class="page">
+    <div class="header-actions">
+      <h2>Student Management</h2>
+      <button class="btn btn-primary" onclick="openModal('MEMBER', 'add', null, 'student')">Add New Student</button>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="search-students" placeholder="Search students...">
+      <button class="btn btn-secondary" onclick="search('MEMBER', 'student')">Search</button>
+    </div>
+    <div id="table-students"></div>
+  </div>
+
+  <div id="borrow-return" class="page">
+    <div class="header-actions">
+      <h2>Borrow & Return</h2>
+    </div>
+
+    <div class="card">
+      <h3>New Transaction</h3>
+      <form id="borrow-form" onsubmit="handleBorrow(event)" style="margin-top: 1rem; display: flex; gap: 1rem; align-items: flex-end;">
+        <div style="flex: 1;">
+            <label>Member</label>
+            <select id="borrow-member" required>
+                <option value="">Select Member</option>
+            </select>
+        </div>
+        <div style="flex: 1;">
+            <label>Book</label>
+            <select id="borrow-book" required>
+                <option value="">Select Book</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Borrow Book</button>
+      </form>
+    </div>
+
+    <h3>Transaction History</h3>
+    <div id="table-borrow"></div>
+  </div>
+
+</div>
+
+<div id="modal" class="modal-overlay hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="modal-title">Title</h3>
+      <button class="close-modal" onclick="closeModal()">&times;</button>
+    </div>
+    <form id="dynamic-form"></form>
+    <div style="margin-top: 1.5rem; text-align: right;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" form="dynamic-form" class="btn btn-primary">Save</button>
+    </div>
+  </div>
+</div>
+
+<?!= include('js'); ?>
+</body>
+</html>
